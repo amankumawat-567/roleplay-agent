@@ -1,0 +1,38 @@
+# Copy this file to data/games/<your_game_id>/game.yaml and fill it in.
+# The directory name becomes the game's id.
+
+title: "" # shown in the picker, e.g. "Stranded on a road trip"
+character_name: "" # optional - who the AI plays, e.g. "Alex" - shown in chat instead of title (a scenario, not a name). Falls back to title when blank.
+tags: [] # short labels for the picker, e.g. [casual, drama, sci-fi]
+provider: ollama # optional - ollama (default) | openai | anthropic, see configs/providers.yaml
+model: YOUR-CHAT-CAPABLE-MODEL # any model from `ollama list` (or the provider's own model name)
+starter: user # ai | user - who sends the first line
+num_ctx: 8192 # optional - context window to request from Ollama; omit to use the app default
+
+persona: |
+  Who the AI plays: name, personality, speech style, what they want/avoid
+  saying. Be specific about tone (dry, warm, blunt, anxious...) - that's what
+  actually shapes how it talks.
+
+user_role: |
+  Who the human is playing in this scene - their relationship to the AI's
+  character and anything the AI should assume the user already knows.
+
+script: |
+  The scene's background and a loose arc, NOT literal dialogue - a few beats
+  the conversation might drift through, in order, e.g.:
+  1. ...
+  2. ...
+  3. ...
+  Self-evaluation: after each user message, silently judge which beat the
+  conversation is closest to and only nudge toward the next one if it feels
+  natural - never force a topic change or announce the plan.
+
+research_query: "" # optional: seed search query used by the research step
+
+memory_recall: false # optional - long-term memory across sessions (needs `ollama pull nomic-embed-text`)
+
+skills: [] # optional - in-conversation tools the model can call, e.g. [web_research]
+
+# Do not put research_notes here - the research step writes those separately
+# to data/games/<your_game_id>/research.yaml (see scripts/research.py).
