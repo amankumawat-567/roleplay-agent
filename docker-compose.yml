@@ -1,0 +1,16 @@
+# Single-user local setup: the app container talks to Ollama running on the
+# host machine. On Linux, uncomment the extra_hosts block below; on macOS/
+# Windows Docker Desktop, host.docker.internal already resolves.
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - ROLEPLAY_DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+      - ./configs:/app/configs
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"  # needed on Linux

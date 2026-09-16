@@ -1,0 +1,27 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.env
+node_modules/
+dist/
+*.tsbuildinfo
+configs_excluded/
+.pytest_cache/
+.ruff_cache/
+
+# data/games/ (authored personas) IS tracked - everything else under data/
+# is runtime/generated state, not source.
+data/app.db
+data/app.db-wal
+data/app.db-shm
+data/voice_samples/
+
+# design reference screenshots/video, not source
+ref/
+.playwright-mcp/
+
+# runtime log output, not source
+logs/*
+!logs/.gitkeep
