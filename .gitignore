@@ -21,7 +21,7 @@ data/voice_samples/
 # design reference screenshots/video, not source
 ref/
 .playwright-mcp/
+.kilo/
 
 # runtime log output, not source
-logs/*
-!logs/.gitkeep
+logs/
