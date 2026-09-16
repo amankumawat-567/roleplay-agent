@@ -1,0 +1,271 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #060509;
+  --color-bg-soft: #060509;
+  --color-panel: #120f1a;
+  --color-panel-hover: #191624;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-soft: rgba(255, 255, 255, 0.05);
+  --color-text: #f3f1f7;
+  --color-sub: #948da3;
+  --color-sub-dim: #67617a;
+  --color-accent: #a855f7;
+  --color-accent-2: #ec4899;
+  --color-user-bubble: #7c3aed;
+
+  /* Glass surface scale - cards/panels sit one step above the base
+     background instead of being pure black-on-black, with a visible (if
+     faint) border so composed layouts read as grouped, not floating. */
+  --color-surface: rgba(255, 255, 255, 0.035);
+  --color-surface-hover: rgba(255, 255, 255, 0.06);
+  --color-surface-border: rgba(255, 255, 255, 0.1);
+
+  --font-sans: "Baloo 2", "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A near-invisible film grain over the whole app - the single cheapest
+   trick for making a flat dark UI feel like material instead of a void. */
+.bg-grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+}
+
+.text-gradient {
+  background: linear-gradient(120deg, var(--color-text) 30%, var(--color-accent) 75%, var(--color-accent-2) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* Horizontal-scroll rows (Explore's carousel/category/grid strips) that are
+   steered with arrow buttons rather than a visible native scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.glass-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes orb-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+.animate-orb {
+  animation: orb-pulse 5s ease-in-out infinite;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-rise-in {
+  animation: rise-in 0.28s ease-out both;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+.animate-blink {
+  animation: blink 1s step-start infinite;
+}
+
+@keyframes glow-drift {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(8deg);
+  }
+}
+.animate-glow-drift {
+  animation: glow-drift 14s ease-in-out infinite;
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin-slow {
+  animation: spin-slow 9s linear infinite;
+}
+.animate-spin-slow-reverse {
+  animation: spin-slow 13s linear infinite reverse;
+}
+.animate-spin-fast-reverse {
+  animation: spin-slow 2.4s linear infinite reverse;
+}
+
+@keyframes aurora-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(6%, 8%) scale(1.2);
+  }
+}
+.animate-aurora-1 {
+  animation: aurora-drift 16s ease-in-out infinite;
+}
+.animate-aurora-2 {
+  animation: aurora-drift 20s ease-in-out infinite reverse;
+  animation-delay: -4s;
+}
+.animate-aurora-3 {
+  animation: aurora-drift 24s ease-in-out infinite;
+  animation-delay: -10s;
+}
+
+@keyframes float-particle {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-160px) translateX(var(--drift, 12px));
+    opacity: 0;
+  }
+}
+.animate-float-particle {
+  animation: float-particle 6s ease-in-out infinite;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    /* No `transform` here on purpose: ending on an explicit translateY(0)
+       (instead of letting it settle back to the element's un-animated
+       `none`) leaves a permanent transform behind after the animation
+       finishes, which creates a stacking context and traps any z-indexed
+       popover inside this element under later, non-transformed siblings. */
+    opacity: 1;
+  }
+}
+.animate-fade-up {
+  animation: fade-up 0.6s var(--ease-out-expo) both;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.animate-shimmer {
+  background: linear-gradient(
+    100deg,
+    var(--color-surface) 40%,
+    var(--color-surface-hover) 50%,
+    var(--color-surface) 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    /* Same reasoning as fade-up above: no lingering transform. */
+    opacity: 1;
+  }
+}
+.animate-pop-in {
+  animation: pop-in 0.35s var(--ease-out-expo) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-orb,
+  .animate-glow-drift,
+  .animate-spin-slow,
+  .animate-spin-slow-reverse,
+  .animate-spin-fast-reverse,
+  .animate-aurora-1,
+  .animate-aurora-2,
+  .animate-aurora-3,
+  .animate-float-particle,
+  .animate-blink,
+  .animate-fade-up,
+  .animate-shimmer,
+  .animate-pop-in {
+    animation: none;
+  }
+}
