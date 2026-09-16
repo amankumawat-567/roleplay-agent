@@ -1,0 +1,25 @@
+# Section C - local text-to-speech via mlx-audio's Qwen3-TTS CustomVoice
+# model (see docs/roadmap.md section C for the platform spike this is
+# built on, and llm/tts.py for the synthesis call itself). Model weights
+# aren't checked in - mlx-audio resolves and caches this repo id from
+# Hugging Face on first use (~1GB, one-time).
+#
+# 4-bit, not 8-bit: verified live on this machine - cached load time 3.2s
+# -> 1.5s, real-time-factor ~1.2x -> ~2.5x, time-to-first-audio-chunk
+# 0.88s -> 0.33s, all roughly halved or better, at some voice-quality cost
+# to be judged by ear. Revert to the -8bit repo id if that cost isn't
+# worth it.
+model_repo: YOUR-VOICE-CLONE-MODEL # mlx-community/Qwen3-TTS-12Hz-0.6B-Base-6bit
+
+# The voice-cloning checkpoint - used automatically whenever a persona's
+# `voice:` names a WAV under data/voice_samples/ instead of one of
+# llm.tts.SUPPORTED_VOICES's curated presets (see scripts/extract_audio_sample.py
+# for producing one). Much smaller than the preset model above, so this is
+# only ever loaded on demand, never alongside it.
+clone_model_repo: YOUR-VOICE-CLONE-CHECKPOINT # mlx-community/Qwen3-TTS-12Hz-0.6B-Base-6bit-VoiceClone
+
+# Caps how much of a reply gets synthesized in one call - keeps worst-case
+# request time bounded (measured ~1.2x real-time-factor, so this is a soft
+# ceiling of low tens of seconds, not minutes) rather than growing
+# unbounded with an unusually long reply.
+max_chars: 1200

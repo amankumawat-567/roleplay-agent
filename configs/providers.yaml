@@ -1,0 +1,18 @@
+# Ollama is the zero-config default - every existing game.yaml with no
+# `provider:` field keeps working unchanged. OpenAI/Anthropic are opt-in:
+# set `provider: openai` (or `anthropic`) on a game and export the matching
+# env var below (or put it in .env). No default_provider here - a new
+# persona's suggested provider is chosen once at random among whichever of
+# these are actually reachable, then remembered (see llm/capabilities.py's
+# get_default_provider) rather than always favoring whichever is listed
+# first.
+providers:
+  ollama:
+    kind: ollama
+    base_url: http://127.0.0.1:11434
+  # openai:
+  #   kind: openai
+  #   api_key_env: OPENAI_API_KEY
+  # anthropic:
+  #   kind: anthropic
+  #   api_key_env: ANTHROPIC_API_KEY

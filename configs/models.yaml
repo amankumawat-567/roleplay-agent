@@ -1,0 +1,19 @@
+# Application behavior around chat generation - config/settings.py's
+# AppConfig (not env-overridable, unlike configs/app.yaml's host/port - see
+# docs/architecture.md's "Config hygiene").
+# No default_model here - "the default" is computed at the moment it's
+# needed (the most recently pulled/updated chat-capable model), never a
+# name baked into this file. See llm/capabilities.py.
+keep_alive: "30m" # keep the Ollama model (and its KV cache) resident between chat turns
+keep_last_messages: 20 # raw messages kept verbatim; older ones get folded into the running summary
+default_num_ctx: 8192 # Ollama defaults to 2048 regardless of the model's real max context
+embedding_model: YOUR-EMBEDDING-MODEL # `ollama pull nomic-embed-text` - only needed if a game sets memory_recall: true
+
+# Model/provider used for the AI game-builder chat (A2) - independent of any
+# persona's own provider. Left unset by default - falls through to the same
+# computed default as any new persona (see llm/capabilities.py). Uncomment
+# and set both to pin it at a stronger hosted model (see
+# configs/providers.yaml) if a local model's structured-output quality for
+# drafting a persona isn't good enough.
+# builder_provider: openai
+# builder_model: gpt-4o-mini

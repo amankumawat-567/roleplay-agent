@@ -1,0 +1,9 @@
+# Settings for section A3's universal URL-transcript import (transcript/media.py).
+# Caps how much transcript text reaches the draft-generation prompt - bounds
+# prompt size regardless of how long the source video actually is.
+max_chars: 20000
+
+# faster-whisper model size used only when a URL has no captions to fall
+# back on (tiny/base/small/medium/large-v3, or a distil-* variant) - bigger
+# is more accurate and much slower on CPU.
+whisper_model_size: base

@@ -1,0 +1,5 @@
+# Environment/infra config only - see config/settings.py's Settings class.
+# Both of these can be overridden without editing this file via
+# ROLEPLAY_<NAME> env vars or a .env file, e.g. ROLEPLAY_PORT=9000.
+host: 127.0.0.1
+port: 8000
