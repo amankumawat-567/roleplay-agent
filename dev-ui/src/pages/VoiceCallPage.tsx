@@ -93,10 +93,16 @@ export function VoiceCallPage() {
           // to run either. Only a starter:"ai" persona has anything to say
           // unprompted; run that turn here instead of just sitting silent
           // and waiting for a mic tap that isn't coming.
+          //
+          // Set before the first await, not after: StrictMode's dev-mode
+          // double-invoke of this effect otherwise lets both invocations'
+          // .then() callbacks run past this guard (neither has set it yet)
+          // and both call streamChat - verified live, two /chat calls and
+          // two spoken replies for the same session.
+          openingSpokenRef.current = true;
           const detail = await api.getGame(res.session.game_id).catch(() => null);
           if (detail?.starter !== "ai") return;
 
-          openingSpokenRef.current = true;
           setPhase("thinking");
           setCaption("…");
           try {
