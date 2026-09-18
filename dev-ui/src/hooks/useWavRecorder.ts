@@ -97,6 +97,13 @@ const NO_SPEECH_TIMEOUT_MS = 6000;
 // Hard cap regardless of VAD state - a safety valve against a stuck-open
 // mic if the endpointer's threshold/hangover logic ever fails to fire.
 const MAX_RECORDING_MS = 45000;
+// Grace period before the endpointer judges anything at all - without
+// this, a mic-activation pop or the acoustic tail of the persona's own
+// just-finished TTS reaching a real (non-headphone) microphone can false-
+// trigger "speech started", and normal silence right after then trips
+// SILENCE_HANGOVER_MS a moment later - the mic reads as opening and
+// closing almost instantly, before the user gets a real chance to talk.
+const LISTEN_WARMUP_MS = 350;
 
 /** Mic capture for voice mode (see docs/roadmap.md F3), auto-endpointed by
  * default: `start()` takes an optional `onAutoStop` callback that fires
@@ -167,6 +174,7 @@ export function useWavRecorder(): WavRecorder {
 
         if (!onAutoStopRef.current || autoStopFiredRef.current) return;
         const now = performance.now();
+        if (now - startedAtRef.current < LISTEN_WARMUP_MS) return;
         if (rms >= SPEECH_RMS_THRESHOLD) {
           speechBufferStreakRef.current += 1;
           if (speechBufferStreakRef.current >= MIN_SPEECH_BUFFERS) hasSpeechRef.current = true;
