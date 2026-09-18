@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -231,10 +231,10 @@ function ChatRow({
       }`}
     >
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
-      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-all duration-150 group-hover:opacity-100">
+      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
         <button
           onClick={startRename}
-          title="Rename chat"
+          aria-label="Rename chat"
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[var(--color-sub-dim)] transition-all duration-150 hover:bg-white/[0.08] hover:text-[var(--color-text)]"
         >
           <Pencil size={12} />
@@ -242,7 +242,7 @@ function ChatRow({
         <button
           onClick={onArchive}
           disabled={archiving}
-          title="Archive chat"
+          aria-label="Archive chat"
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[var(--color-sub-dim)] transition-all duration-150 hover:bg-white/[0.08] hover:text-[var(--color-text)] disabled:opacity-50"
         >
           <Archive size={12} />
@@ -250,7 +250,7 @@ function ChatRow({
         <button
           onClick={onDelete}
           disabled={deleting}
-          title="Delete chat"
+          aria-label="Delete chat"
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[var(--color-sub-dim)] transition-all duration-150 hover:bg-rose-500/15 hover:text-rose-400 disabled:opacity-50"
         >
           <Trash2 size={12} />
@@ -347,19 +347,36 @@ function RecentChats({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({
+  setMobileDrawerOpen,
+}: {
+  setMobileDrawerOpen: (open: boolean) => void;
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const health = useHealthStatus();
   const healthDotClass =
     health === "online" ? "bg-emerald-400" : health === "offline" ? "bg-rose-400" : "bg-amber-400";
   const isChatMode = location.pathname.startsWith("/chat/");
+  const MOBILE_BREAKPOINT = 1024;
+
+  useEffect(() => {
+    function checkMobile() {
+      if (window.innerWidth >= MOBILE_BREAKPOINT) {
+        setMobileDrawerOpen(false);
+      }
+    }
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, [setMobileDrawerOpen]);
 
   return (
     <aside
       className={`relative z-10 flex h-full shrink-0 flex-col bg-[var(--color-bg-soft)] transition-[width] duration-200 ${
         collapsed ? "w-[76px]" : "w-64"
-      }`}
+      } hidden lg:flex`}
+      aria-label="Sidebar navigation"
     >
       <div className={`flex items-center pt-5 ${collapsed ? "flex-col gap-3 px-3" : "justify-between px-5"}`}>
         <NavLink to="/" className="relative flex items-center gap-2.5">
@@ -370,12 +387,13 @@ export function Sidebar() {
               className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-[var(--color-bg-soft)] ${healthDotClass}`}
             />
           </div>
-          {!collapsed && <span className="text-[17px] font-bold tracking-tight">Roleplay</span>}
+          {!collapsed && <span className="font-heading text-[17px] font-bold tracking-tight">Roleplay</span>}
         </NavLink>
         <button
           onClick={() => setCollapsed((v) => !v)}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--color-sub-dim)] transition-colors hover:text-[var(--color-text)]"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <PanelLeft size={15} />
         </button>
