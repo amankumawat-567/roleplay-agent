@@ -13,15 +13,19 @@ import { useAppStore } from "../stores/useAppStore";
  * the app. */
 export function ProfileAvatar({ size = 36, ringClassName = "ring-sky-400/60" }: { size?: number; ringClassName?: string }) {
   const avatarId = useAppStore((s) => s.profile.avatar_id);
+  const label = avatarId === "profile-avatar" ? "Default avatar" : avatarId.charAt(0).toUpperCase() + avatarId.slice(1);
   return (
-    <Link to="/profile" title="Your profile">
+    <Link to="/profile" aria-label={`View profile (${label})`}>
       <img
         src={profileAvatarUrlFor(avatarId)}
-        alt=""
+        alt={label}
         width={size}
         height={size}
         className={`shrink-0 rounded-full ring-2 transition-transform duration-150 hover:scale-105 ${ringClassName}`}
         style={{ width: size, height: size }}
+        onError={(e) => {
+          e.currentTarget.src = "/profile-avatar.svg";
+        }}
       />
     </Link>
   );

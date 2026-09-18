@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { Lightbulb, Mic, Paperclip, Send } from "lucide-react";
+import { Lightbulb, Mic, Paperclip, Send, Square } from "lucide-react";
 
 interface ComposerProps {
   disabled: boolean;
@@ -34,6 +34,7 @@ function PillButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-pressed={active}
       className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         active
           ? "border-[var(--color-accent-2)]/30 bg-[var(--color-accent-2)]/15 text-[var(--color-accent-2)]"
@@ -107,7 +108,11 @@ export function Composer({ disabled, onSend, placeholder, hideDictation }: Compo
       className="rounded-[28px] bg-gradient-to-r from-[var(--color-accent)]/40 via-[var(--color-border)] to-[var(--color-accent-2)]/40 p-[1.5px] shadow-lg shadow-black/20 transition-all duration-200 focus-within:from-[var(--color-accent)]/70 focus-within:to-[var(--color-accent-2)]/70"
     >
       <div className="flex flex-col gap-3 rounded-[26px] bg-[var(--color-panel)] px-5 pb-3 pt-4">
+        <label htmlFor="composer-input" className="sr-only">
+          Message
+        </label>
         <input
+          id="composer-input"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -117,18 +122,24 @@ export function Composer({ disabled, onSend, placeholder, hideDictation }: Compo
         />
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <PillButton icon={<Paperclip size={14} />} label="Attach" disabled title="Not available yet" />
-            <PillButton icon={<Lightbulb size={14} />} label="Deep Think" disabled title="Not available yet" />
+            <PillButton icon={<Paperclip size={14} aria-hidden="true" />} label="Attach" disabled title="Not available yet" />
+            <PillButton icon={<Lightbulb size={14} aria-hidden="true" />} label="Deep Think" disabled title="Not available yet" />
           </div>
           <div className="flex items-center gap-2">
             {!hideDictation && (
               <PillButton
-                icon={<Mic size={14} />}
-                label="Voice"
+                icon={listening ? <Square size={14} aria-hidden="true" /> : <Mic size={14} aria-hidden="true" />}
+                label={listening ? "Stop" : "Voice"}
                 active={listening}
                 onClick={toggleVoice}
                 disabled={!SpeechRecognitionCtor}
-                title={SpeechRecognitionCtor ? "Dictate a message" : "Voice input isn't supported in this browser"}
+                title={
+                  !SpeechRecognitionCtor
+                    ? "Voice input isn't supported in this browser"
+                    : listening
+                      ? "Stop dictating"
+                      : "Dictate a message"
+                }
               />
             )}
             <button
@@ -136,7 +147,7 @@ export function Composer({ disabled, onSend, placeholder, hideDictation }: Compo
               disabled={disabled || !value.trim()}
               className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)] px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 enabled:hover:scale-[1.03] enabled:hover:shadow-[0_4px_16px_-2px_rgba(168,85,247,0.6)] disabled:cursor-not-allowed disabled:opacity-40 active:scale-95"
             >
-              <Send size={14} />
+              <Send size={14} aria-hidden="true" />
               Send
             </button>
           </div>

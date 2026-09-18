@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
@@ -37,6 +37,7 @@ export function PersonaMenu({ game, onDeleted, triggerClassName, iconSize = 14 }
   const refreshResearch = useAppStore((s) => s.refreshResearch);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const [busy, setBusy] = useState(false);
@@ -47,6 +48,7 @@ export function PersonaMenu({ game, onDeleted, triggerClassName, iconSize = 14 }
     setOpen(false);
     setConfirmingDelete(false);
     setError(null);
+    triggerRef.current?.focus();
   }
 
   function toggle(e: MouseEvent) {
@@ -60,6 +62,38 @@ export function PersonaMenu({ game, onDeleted, triggerClassName, iconSize = 14 }
     if (rect) setCoords({ top: rect.bottom + 6, left: Math.max(8, rect.right - 200) });
     setOpen(true);
   }
+
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(e: globalThis.KeyboardEvent) {
+      if (e.key === "Escape") {
+        close();
+        return;
+      }
+      // Keep Tab cycling within the menu instead of letting focus escape
+      // into the page behind this still-open portal.
+      if (e.key === "Tab") {
+        const items = menuRef.current?.querySelectorAll<HTMLElement>('button[type="button"]:not(:disabled)');
+        if (!items || items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    // Focus first menu item
+    setTimeout(() => {
+      const firstItem = menuRef.current?.querySelector('button[type="button"]') as HTMLElement;
+      firstItem?.focus();
+    }, 0);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
 
   function handleEdit(e: MouseEvent) {
     e.preventDefault();
@@ -162,7 +196,9 @@ export function PersonaMenu({ game, onDeleted, triggerClassName, iconSize = 14 }
         ref={triggerRef}
         type="button"
         onClick={toggle}
-        title="Manage this persona"
+        aria-label="Manage this persona"
+        aria-expanded={open}
+        aria-haspopup="menu"
         className={
           triggerClassName ??
           "flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-sub)] transition hover:bg-white/[0.08] hover:text-[var(--color-text)]"
@@ -175,28 +211,53 @@ export function PersonaMenu({ game, onDeleted, triggerClassName, iconSize = 14 }
           <>
             <div className="fixed inset-0 z-[100]" onClick={close} />
             <div
+              ref={menuRef}
               className="fixed z-[110] flex w-48 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-[#14121e] py-1 shadow-xl"
               style={{ top: coords.top, left: coords.left }}
+              role="menu"
             >
-              <button type="button" onClick={handleEdit} className={menuItemClass}>
-                <Pencil size={13} /> Edit
-              </button>
-              <button type="button" onClick={handleEditWithAi} disabled={busy} className={menuItemClass}>
-                <Sparkles size={13} /> Edit with AI
-              </button>
-              <button type="button" onClick={handleDuplicate} disabled={busy} className={menuItemClass}>
-                <Copy size={13} /> Duplicate
-              </button>
-              <button type="button" onClick={handleResearch} className={menuItemClass}>
-                <RefreshCw size={13} className={researching ? "animate-spin" : ""} /> Refresh research
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleEdit}
+                className={menuItemClass}
+              >
+                <Pencil size={13} aria-hidden="true" /> Edit
               </button>
               <button
                 type="button"
+                role="menuitem"
+                onClick={handleEditWithAi}
+                disabled={busy}
+                className={menuItemClass}
+              >
+                <Sparkles size={13} aria-hidden="true" /> Edit with AI
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleDuplicate}
+                disabled={busy}
+                className={menuItemClass}
+              >
+                <Copy size={13} aria-hidden="true" /> Duplicate
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleResearch}
+                className={menuItemClass}
+              >
+                <RefreshCw size={13} className={researching ? "animate-spin" : ""} aria-hidden="true" /> Refresh research
+              </button>
+              <button
+                type="button"
+                role="menuitem"
                 onClick={handleDelete}
                 disabled={busy}
                 className={`${menuItemClass} text-rose-400 hover:bg-rose-500/10 hover:text-rose-300`}
               >
-                <Trash2 size={13} /> {confirmingDelete ? "Confirm delete?" : "Delete"}
+                <Trash2 size={13} aria-hidden="true" /> {confirmingDelete ? "Confirm delete?" : "Delete"}
               </button>
               {error && <p className="px-3 py-1.5 text-[11px] text-rose-400">{error}</p>}
             </div>

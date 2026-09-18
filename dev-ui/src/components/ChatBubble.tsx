@@ -111,30 +111,42 @@ function MessageActions({ text, sessionId }: { text: string; sessionId: string }
     }
   }
 
+  const speakLabel =
+    speakState === "loading" ? "Synthesizing…" : speakState === "playing" ? "Stop reading aloud" : "Read aloud";
+
   return (
     <div className="flex items-center gap-2.5 text-[var(--color-sub-dim)]">
-      <button onClick={handleCopy} title="Copy" className="transition-colors hover:text-[var(--color-text)]">
-        {copied ? <Check size={13} /> : <Copy size={13} />}
+      <button
+        onClick={handleCopy}
+        aria-label={copied ? "Copied" : "Copy"}
+        title="Copy"
+        className="transition-colors hover:text-[var(--color-text)]"
+      >
+        {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
       </button>
       <button
         onClick={() => setLiked((v) => !v)}
+        aria-label="Like"
+        aria-pressed={liked}
         title="Like"
         className={`transition-colors hover:text-[var(--color-text)] ${liked ? "text-[var(--color-accent-2)]" : ""}`}
       >
-        <ThumbsUp size={13} fill={liked ? "currentColor" : "none"} />
+        <ThumbsUp size={13} aria-hidden="true" fill={liked ? "currentColor" : "none"} />
       </button>
       <button
         onClick={handleSpeak}
-        title={speakState === "loading" ? "Synthesizing…" : "Read aloud"}
+        aria-label={speakLabel}
+        aria-pressed={speakState === "playing"}
+        title={speakLabel}
         disabled={speakState === "loading"}
         className="transition-colors hover:text-[var(--color-text)] disabled:cursor-wait"
       >
         {speakState === "loading" ? (
-          <Loader2 size={13} className="animate-spin" />
+          <Loader2 size={13} className="animate-spin" aria-hidden="true" />
         ) : speakState === "playing" ? (
-          <VolumeX size={13} />
+          <VolumeX size={13} aria-hidden="true" />
         ) : (
-          <Volume2 size={13} />
+          <Volume2 size={13} aria-hidden="true" />
         )}
       </button>
     </div>

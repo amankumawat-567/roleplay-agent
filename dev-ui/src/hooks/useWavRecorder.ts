@@ -126,8 +126,13 @@ export function useWavRecorder(): WavRecorder {
       silentGainRef.current = silentGain;
       setRecording(true);
       return true;
-    } catch {
-      setError("Microphone access is required for voice mode.");
+    } catch (err) {
+      const denied = err instanceof DOMException && err.name === "NotAllowedError";
+      setError(
+        denied
+          ? "Microphone access is blocked - allow it for this site in your browser's address-bar or site settings, then tap the mic again."
+          : "Couldn't reach a microphone - check that one is connected and not in use by another app, then tap the mic again.",
+      );
       return false;
     }
   }

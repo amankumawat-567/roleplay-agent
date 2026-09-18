@@ -63,7 +63,7 @@ export function GameTile({ icon: Icon, title, subtitle, badge, accent, coverUrl,
       </button>
 
       {game && (
-        <div className="absolute right-3 top-3 z-10 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <div className="absolute right-3 top-3 z-10 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
           <PersonaMenu
             game={game}
             triggerClassName="rounded-full bg-black/40 p-1.5 text-white/80 backdrop-blur-md transition hover:bg-black/60 hover:text-white"

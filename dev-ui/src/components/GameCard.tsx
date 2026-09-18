@@ -54,7 +54,7 @@ export function GameCard({ game, onStart, onStartVoice }: GameCardProps) {
           </span>
         )}
 
-        <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
           {canStartVoice && (
             <button
               onClick={(e) => {
@@ -64,7 +64,7 @@ export function GameCard({ game, onStart, onStartVoice }: GameCardProps) {
               title="Start in voice mode"
               className="rounded-full bg-black/40 p-1.5 text-white/80 backdrop-blur-md transition hover:bg-black/60 hover:text-white"
             >
-              <Mic size={14} />
+              <Mic size={14} aria-hidden="true" />
             </button>
           )}
           <PersonaMenu
@@ -87,7 +87,7 @@ export function GameCard({ game, onStart, onStartVoice }: GameCardProps) {
               <p className="mt-1 truncate text-xs text-white/55">{restTags.slice(0, 2).join(" · ")}</p>
             )}
             <span className="mt-2.5 flex translate-y-1 items-center gap-1.5 text-xs font-medium text-white opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-              <Sparkles size={12} /> Start chatting
+              <Sparkles size={12} aria-hidden="true" /> Start chatting
             </span>
           </div>
         </button>

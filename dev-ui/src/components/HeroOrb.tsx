@@ -58,7 +58,8 @@ export function HeroOrb({
   const coreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const reactive = phase === "listening" || phase === "speaking";
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reactive = !reducedMotion && (phase === "listening" || phase === "speaking");
     if (!reactive) {
       // Not audio-reactive right now - settle back to rest so a phase
       // change mid-pulse (e.g. the user stops talking) doesn't leave the
