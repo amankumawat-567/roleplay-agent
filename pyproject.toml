@@ -31,12 +31,14 @@ dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.6"]
 # base dependency set so installing/running the app elsewhere is unaffected;
 # every voice request just 503s with a clear message until this is installed.
 tts = ["mlx-audio>=0.5"]
-# Section A3 - local Whisper transcription fallback for URLs with no
-# captions (see transcript/media.py). Kept optional since it pulls in
-# ctranslate2/torch-sized weights and downloads model checkpoints at
-# runtime; the caption-first path (most URLs) works without it, and every
-# audio-fallback request just 422s with a clear message until this is
-# installed.
+# Section A3 - local Whisper transcription, shared by two fallbacks:
+# transcript/media.py's no-captions-found path for a persona-source URL,
+# and voice mode's non-audio-model path (services/stt/whisper.py, used by
+# agent/voice.py when a persona's model can't take audio directly). Kept
+# optional since it pulls in ctranslate2/torch-sized weights and downloads
+# model checkpoints at runtime; both caller's primary paths (captions when
+# they exist; a real audio-capable model) work without it, and every
+# fallback request just 422s with a clear message until this is installed.
 transcribe = ["faster-whisper>=1.0"]
 
 [tool.hatch.build.targets.wheel]

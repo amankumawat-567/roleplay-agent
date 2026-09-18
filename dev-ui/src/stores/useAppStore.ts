@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "../services/api";
-import type { Game, ModelsResponse, Profile, SessionSummary } from "../types";
+import type { Game, Profile, SessionSummary } from "../types";
 
 const DEFAULT_PROFILE: Profile = { avatar_id: "profile-avatar", display_name: null };
 
@@ -8,12 +8,6 @@ interface AppState {
   games: Game[];
   sessions: SessionSummary[];
   profile: Profile;
-  /** The capability cache (llm/capabilities.py), loaded once here rather
-   * than per-page - section F's voice mode switch (ChatPage) and
-   * Composer's dictation gate both need it. Null until the first
-   * loadAll() resolves; utils/voiceMode.ts treats that as "not available
-   * yet" rather than guessing. */
-  models: ModelsResponse | null;
   loading: boolean;
   error: string | null;
   researchingGameId: string | null;
@@ -44,7 +38,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   games: [],
   sessions: [],
   profile: DEFAULT_PROFILE,
-  models: null,
   loading: true,
   error: null,
   researchingGameId: null,
@@ -52,16 +45,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadAll: async () => {
     set({ loading: true, error: null });
     try {
-      const [games, sessions, profile, models] = await Promise.all([
-        api.listGames(),
-        api.listSessions(),
-        api.getProfile(),
-        // Best-effort - a session with nothing usable right now (no
-        // Ollama, no hosted key) just means voice mode never lights up
-        // anywhere, not a load failure for the whole app.
-        api.getModels().catch(() => null),
-      ]);
-      set({ games, sessions, profile, models, loading: false });
+      const [games, sessions, profile] = await Promise.all([api.listGames(), api.listSessions(), api.getProfile()]);
+      set({ games, sessions, profile, loading: false });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : "Failed to load", loading: false });
     }

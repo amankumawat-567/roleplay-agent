@@ -1,45 +1,46 @@
 from roleplay_agent.agents.game_play import voice as voice_module
-from roleplay_agent.agents.game_play.voice import SpeechSegment, VoiceTurn, generate_voice_turn
+from roleplay_agent.agents.game_play.voice import SpeechSegment, VoiceReply, VoiceTurn, generate_voice_turn
 from roleplay_agent.services.storage.models import Message
 
 
 class _FakeStructuredLLM:
-    def __init__(self, turn: VoiceTurn):
-        self.turn = turn
+    def __init__(self, result):
+        self.result = result
         self.calls: list = []
 
     def invoke(self, messages):
         self.calls.append(messages)
-        return self.turn
+        return self.result
 
 
 class _FakeLLM:
-    def __init__(self, turn: VoiceTurn):
-        self.turn = turn
+    def __init__(self, result, expected_schema):
+        self.result = result
+        self.expected_schema = expected_schema
         self.structured: _FakeStructuredLLM | None = None
 
     def with_structured_output(self, schema):
-        assert schema is VoiceTurn
-        self.structured = _FakeStructuredLLM(self.turn)
+        assert schema is self.expected_schema
+        self.structured = _FakeStructuredLLM(self.result)
         return self.structured
 
 
-def test_generate_voice_turn_returns_structured_output(monkeypatch):
+def test_generate_voice_turn_returns_structured_output_from_audio(monkeypatch):
     turn = VoiceTurn(
         user_said="hey what's up",
         segments=[SpeechSegment(text="Hey there.", delivery="warm, a little surprised")],
     )
-    fake = _FakeLLM(turn)
+    fake = _FakeLLM(turn, VoiceTurn)
     monkeypatch.setattr(voice_module, "build_llm", lambda *a, **k: fake)
 
     result = generate_voice_turn(
         "system prompt",
         [Message(role="user", content="hi")],
-        b"RIFF....WAVEfmt ",
         "ollama",
         "test-model",
         8192,
         "30m",
+        audio=b"RIFF....WAVEfmt ",
     )
 
     assert result == turn
@@ -56,16 +57,38 @@ def test_generate_voice_turn_returns_structured_output(monkeypatch):
 def test_generate_voice_turn_uses_provider_and_model(monkeypatch):
     calls = []
     turn = VoiceTurn(user_said="ok", segments=[SpeechSegment(text="ok")])
-    fake = _FakeLLM(turn)
+    fake = _FakeLLM(turn, VoiceTurn)
     monkeypatch.setattr(
         voice_module,
         "build_llm",
         lambda provider, model, num_ctx, keep_alive: calls.append((provider, model, num_ctx, keep_alive)) or fake,
     )
 
-    generate_voice_turn("sys", [], b"wav-bytes", "openai", "gpt-4o-mini", 4096, "5m")
+    generate_voice_turn("sys", [], "openai", "gpt-4o-mini", 4096, "5m", audio=b"wav-bytes")
 
     assert calls == [("openai", "gpt-4o-mini", 4096, "5m")]
+
+
+def test_generate_voice_turn_from_transcript_asks_only_for_segments(monkeypatch):
+    reply = VoiceReply(segments=[SpeechSegment(text="Pizza sounds great.", delivery="warm")])
+    fake = _FakeLLM(reply, VoiceReply)
+    monkeypatch.setattr(voice_module, "build_llm", lambda *a, **k: fake)
+
+    result = generate_voice_turn(
+        "system prompt",
+        [Message(role="user", content="hi")],
+        "openai",
+        "gpt-4o-mini",
+        4096,
+        "5m",
+        transcript="what's the plan for tonight",
+    )
+
+    # user_said comes straight from the given transcript, not the model -
+    # the model was only asked for VoiceReply's segments.
+    assert result == VoiceTurn(user_said="what's the plan for tonight", segments=reply.segments)
+    messages = fake.structured.calls[0]
+    assert messages[-1].content == "what's the plan for tonight"
 
 
 def test_speech_segment_delivery_defaults_to_none():

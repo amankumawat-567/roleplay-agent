@@ -432,13 +432,13 @@ def test_speak_stream_503_when_synthesis_fails_before_streaming_starts(client, a
     assert "mlx-audio" in response.json()["detail"]
 
 
-def test_voice_turn_422_when_model_lacks_audio_capability(client, app_env, monkeypatch):
+def _patch_no_audio_ollama(monkeypatch, model_id="llama3.1"):
     from roleplay_agent.services.llm import capabilities as capabilities_module
 
     class _NoAudioOllamaClient:
         def list(self):
             class _Model:
-                model = "llama3.1"
+                model = model_id
                 modified_at = None
 
             class _Listing:
@@ -453,6 +453,18 @@ def test_voice_turn_422_when_model_lacks_audio_capability(client, app_env, monke
             return _Show()
 
     monkeypatch.setattr(capabilities_module.ollama, "Client", lambda: _NoAudioOllamaClient())
+
+
+def test_voice_turn_422_when_whisper_not_installed(client, app_env, monkeypatch):
+    from roleplay_agent.api.routes.gameplay import chat as chat_route
+    from roleplay_agent.services.stt import SttUnavailableError
+
+    _patch_no_audio_ollama(monkeypatch)
+
+    def fake_transcribe(audio, model_size):
+        raise SttUnavailableError("faster-whisper isn't installed - run `pip install '.[transcribe]'`.")
+
+    monkeypatch.setattr(chat_route, "transcribe_wav_bytes", fake_transcribe)
     write_game(app_env / "games", "alpha", model="llama3.1")
     session_id = client.post("/api/sessions", json={"game_id": "alpha"}).json()["session_id"]
 
@@ -462,7 +474,72 @@ def test_voice_turn_422_when_model_lacks_audio_capability(client, app_env, monke
     )
 
     assert response.status_code == 422
-    assert "audio" in response.json()["detail"].lower()
+    assert "pip install" in response.json()["detail"]
+
+
+def test_voice_turn_422_when_transcript_is_empty(client, app_env, monkeypatch):
+    from roleplay_agent.api.routes.gameplay import chat as chat_route
+
+    _patch_no_audio_ollama(monkeypatch)
+    monkeypatch.setattr(chat_route, "transcribe_wav_bytes", lambda audio, model_size: "   ")
+    write_game(app_env / "games", "alpha", model="llama3.1")
+    session_id = client.post("/api/sessions", json={"game_id": "alpha"}).json()["session_id"]
+
+    response = client.post(
+        f"/api/sessions/{session_id}/voice-turn",
+        files={"audio": ("clip.wav", b"RIFF....WAVEfmt ", "audio/wav")},
+    )
+
+    assert response.status_code == 422
+    assert "hear" in response.json()["detail"].lower()
+
+
+def test_voice_turn_transcribes_locally_for_a_non_audio_model(client, app_env, monkeypatch):
+    from roleplay_agent.agents.game_play import voice as voice_module
+    from roleplay_agent.agents.game_play.voice import SpeechSegment, VoiceTurn
+    from roleplay_agent.api.routes.gameplay import chat as chat_route
+
+    _patch_no_audio_ollama(monkeypatch)
+
+    captured = {}
+
+    def fake_transcribe(audio, model_size):
+        captured["audio"] = audio
+        captured["model_size"] = model_size
+        return "what's the plan for tonight"
+
+    def fake_generate_voice_turn(
+        system_prompt, recent, provider, model, num_ctx, keep_alive, transcript=None, audio=None
+    ):
+        captured["transcript"] = transcript
+        captured["audio_kwarg"] = audio
+        captured["provider"] = provider
+        captured["model"] = model
+        return VoiceTurn(
+            user_said=transcript,
+            segments=[SpeechSegment(text="I was thinking pizza.", delivery=None)],
+        )
+
+    monkeypatch.setattr(voice_module, "build_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError))
+    monkeypatch.setattr(chat_route, "transcribe_wav_bytes", fake_transcribe)
+    monkeypatch.setattr(chat_route, "generate_voice_turn", fake_generate_voice_turn)
+    write_game(app_env / "games", "alpha", model="llama3.1")
+    session_id = client.post("/api/sessions", json={"game_id": "alpha"}).json()["session_id"]
+
+    response = client.post(
+        f"/api/sessions/{session_id}/voice-turn",
+        files={"audio": ("clip.wav", b"RIFF....WAVEfmt ", "audio/wav")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user_said"] == "what's the plan for tonight"
+    assert body["segments"] == [{"text": "I was thinking pizza.", "delivery": None}]
+    assert captured["audio"] == b"RIFF....WAVEfmt "
+    assert captured["transcript"] == "what's the plan for tonight"
+    assert captured["audio_kwarg"] is None
+    assert captured["provider"] == "ollama"
+    assert captured["model"] == "llama3.1"
 
 
 def test_voice_turn_missing_session_returns_404(client, app_env):
@@ -499,7 +576,9 @@ def test_voice_turn_generates_reply_and_persists_transcript(client, app_env, mon
 
     captured = {}
 
-    def fake_generate_voice_turn(system_prompt, recent, audio, provider, model, num_ctx, keep_alive):
+    def fake_generate_voice_turn(
+        system_prompt, recent, provider, model, num_ctx, keep_alive, audio=None, transcript=None
+    ):
         captured["audio"] = audio
         captured["provider"] = provider
         captured["model"] = model

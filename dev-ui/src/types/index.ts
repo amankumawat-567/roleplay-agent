@@ -9,9 +9,6 @@ export interface Game {
   tags: string[];
   /** Filename only (e.g. "cover.jpg") - build the URL as `/media/games/{id}/{cover_image}`. */
   cover_image: string | null;
-  /** Carried on the list response so voice mode's availability (section F -
-   * see utils/voiceMode.ts) can be checked against the capability cache
-   * without a per-persona fetch. */
   provider: string;
   model: string;
 }

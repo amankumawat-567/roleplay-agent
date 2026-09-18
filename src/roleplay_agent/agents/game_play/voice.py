@@ -5,13 +5,23 @@ existing streamed-text reply: text mode stays untouched (still prose,
 still prompts.RULES, still richText.tsx's parsing), and a voice-mode turn
 is structured output from the start.
 
+Two input paths, depending on whether this turn's model can actually take
+audio (`llm/capabilities.py`'s AUDIO_INPUT_CAPABILITY): a capable model
+hears the raw clip directly and produces both `user_said` and `segments`
+from it in one call (F0's original "no separate speech-to-text step").
+Every other model - hosted providers, non-audio Ollama models - gets the
+clip transcribed locally first (`services/stt/whisper.py`), and only the
+resulting text is sent; `user_said` is then just that transcript, not
+something the model has to produce. `api/routes/gameplay/chat.py`'s
+`/voice-turn` decides which path a given turn takes.
+
 Verified live from real usage, not assumed: `.with_structured_output()`
 schema validity passing is not the same as content quality (the same
 lesson game_builder.py's GameDraft needed real Field descriptions to
 learn) - see this module's own tests plus a live check against this
 project's real default model before relying on this in a shipped UI."""
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
 
 from roleplay_agent.agents.game_play.context import to_audio_message, to_lc_messages
@@ -56,10 +66,22 @@ class VoiceTurn(BaseModel):
     user_said: str = Field(
         description="A faithful transcript of what the user just said in the audio clip you "
         "were given, in their own words - not a summary, not a paraphrase, not a reply to it. "
-        "This is the only record of what they said, since no separate speech-to-text step runs "
-        "in voice mode (F0 - see docs/ARCHITECTURE.md's 'Voice mode') - it exists purely so this turn can be stored "
+        "This is the only record of what they said - it exists purely so this turn can be stored "
         "and recalled later, never spoken back to the user."
     )
+    segments: list[SpeechSegment] = Field(
+        description="One or more speech segments, in the order they would be spoken. Split a "
+        "reply into multiple segments wherever the delivery genuinely changes between them - "
+        "don't force everything into one segment just because it's a single reply."
+    )
+
+
+class VoiceReply(BaseModel):
+    """The transcript-input counterpart to VoiceTurn: used when this turn's
+    audio was already transcribed locally (see this module's docstring) -
+    `user_said` is already known at that point, so only the spoken reply
+    itself is asked of the model."""
+
     segments: list[SpeechSegment] = Field(
         description="One or more speech segments, in the order they would be spoken. Split a "
         "reply into multiple segments wherever the delivery genuinely changes between them - "
@@ -70,27 +92,44 @@ class VoiceTurn(BaseModel):
 def generate_voice_turn(
     system_prompt: str,
     recent: list[Message],
-    audio: bytes,
     provider: str,
     model: str,
     num_ctx: int,
     keep_alive: str,
+    audio: bytes | None = None,
+    transcript: str | None = None,
 ) -> VoiceTurn:
     """`system_prompt` is expected to come from
     agent.prompts.build_voice_system_prompt, not build_system_prompt -
     VoiceTurn's shape only makes sense paired with VOICE_RULES' framing.
-    `audio` is the current turn's raw mic capture (WAV bytes) - `recent`
-    only ever carries *prior* turns as text (this session's own persisted
-    `user_said`/segment-text history), never raw audio, so this is a
-    deliberately separate parameter rather than something to synthesize
-    from `recent` alone.
+    `recent` only ever carries *prior* turns as text (this session's own
+    persisted `user_said`/segment-text history), never raw audio, so the
+    current turn's input is always a separate parameter rather than
+    something to synthesize from `recent` alone.
+
+    Exactly one of `audio` (the current turn's raw mic capture, WAV bytes)
+    or `transcript` (already transcribed locally - see this module's
+    docstring) is given, matching whichever path
+    `api/routes/gameplay/chat.py`'s `/voice-turn` chose for this turn's
+    model. The `audio` branch asks the model for the full VoiceTurn schema
+    (it produces `user_said` itself, hearing the clip); the `transcript`
+    branch already knows `user_said`, so it only asks for VoiceReply's
+    `segments` and wraps the given transcript back in as `user_said`.
 
     A parallel generation path to agent.agent.RoleplayAgent's LangGraph
     `_generate` node, not a route through it (see this module's own
     docstring for why F2 already made that call) - `ChatState` itself stays
-    text-only; this function is where a turn's audio actually lives."""
+    text-only; this function is where a turn's audio/transcript actually
+    lives."""
     llm = build_llm(provider, model, num_ctx, keep_alive)
     messages: list[BaseMessage] = to_lc_messages(system_prompt, recent)
-    messages.append(to_audio_message(audio))
-    structured_llm = llm.with_structured_output(VoiceTurn)
-    return structured_llm.invoke(messages)
+
+    if audio is not None:
+        messages.append(to_audio_message(audio))
+        structured_llm = llm.with_structured_output(VoiceTurn)
+        return structured_llm.invoke(messages)
+
+    messages.append(HumanMessage(content=transcript))
+    structured_llm = llm.with_structured_output(VoiceReply)
+    reply: VoiceReply = structured_llm.invoke(messages)
+    return VoiceTurn(user_said=transcript, segments=reply.segments)

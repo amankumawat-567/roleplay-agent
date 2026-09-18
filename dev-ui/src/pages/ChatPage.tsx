@@ -10,7 +10,6 @@ import { useAppStore } from "../stores/useAppStore";
 import { characterNameFor } from "../utils/persona";
 import { renderRichText, splitIntoLines } from "../utils/richText";
 import { gradientFor } from "../utils/gradient";
-import { hasAudioInputCapability } from "../utils/voiceMode";
 import { formatCountdown } from "../utils/countdown";
 
 /** Backend messages carry no timestamp, so this records "first seen by this
@@ -39,11 +38,11 @@ export function ChatPage() {
   // schedules a check-back, which a mount-only poll would otherwise miss.
   const { remainingMs } = useFollowupCountdown(sessionId!, refresh, streaming);
   const game = useAppStore((s) => s.games.find((g) => g.id === gameId));
-  const models = useAppStore((s) => s.models);
-  // Section F1: voice mode is only ever offered for a persona whose model
-  // actually reports audio-input capability - every other persona sees no
-  // new UI at all (see utils/voiceMode.ts).
-  const voiceModeAvailable = game ? hasAudioInputCapability(game.provider, game.model, models) : false;
+  // Voice mode is offered for every persona (non-audio models fall back to
+  // local Whisper transcription server-side - see docs/ARCHITECTURE.md's
+  // "Voice mode") - this only waits for `game` to avoid flashing the
+  // switch in before the persona itself has loaded.
+  const voiceModeAvailable = !!game;
   // "Who you're talking to" - the persona's own identity, not the
   // session's title (a sidebar/history label since A0's auto-titling
   // shipped - see docs/ARCHITECTURE.md's "Character name, distinct from

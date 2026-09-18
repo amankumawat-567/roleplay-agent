@@ -9,8 +9,10 @@ instant and effectively free; the audio+whisper path is the slow,
 CPU/GPU-heavy path, so it's deliberately the fallback, not the default.
 
 faster-whisper is an optional dependency (`pip install '.[transcribe]'`) -
-imported lazily inside `_whisper_model` only, so the app runs fine (and the
-caption-first path works) with it never installed. Every request that
+the actual model loading lives in `services/stt/whisper.py` (shared with
+voice mode's own Whisper fallback, so the two features don't each load a
+separate model instance), imported lazily there so the app runs fine (and
+the caption-first path works) with it never installed. Every request that
 needs it just raises TranscriptFetchError with an install hint until then.
 """
 
@@ -23,6 +25,8 @@ from pathlib import Path
 
 import httpx
 import yt_dlp
+
+from roleplay_agent.services.stt.whisper import SttUnavailableError, get_whisper_model
 
 # A bare id someone copy-pasted straight out of a YouTube URL - yt-dlp
 # itself needs a real URL, so this is rewritten to one before dispatch.
@@ -37,9 +41,6 @@ _PARSEABLE_EXTS = ("vtt", "srt", "json3", "ttml", "srv3", "srv1")
 
 _TIMESTAMP_RE = re.compile(r"\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}")
 _TAG_RE = re.compile(r"<[^>]+>")
-
-_whisper_models: dict[str, object] = {}
-
 
 class TranscriptFetchError(Exception):
     """No usable extractor/captions/audio for the given URL, or a real
@@ -152,23 +153,15 @@ def _fetch_caption_text(sub_url: str, ext: str) -> str:
     return _parse_json3(raw) if ext == "json3" else _parse_cue_text(raw)
 
 
-def _whisper_model(model_size: str):
-    if model_size not in _whisper_models:
-        try:
-            from faster_whisper import WhisperModel
-        except ModuleNotFoundError as exc:
-            raise TranscriptFetchError(
-                "faster-whisper isn't installed - run `pip install '.[transcribe]'` "
-                "to transcribe videos that have no captions."
-            ) from exc
-        _whisper_models[model_size] = WhisperModel(model_size, device="auto", compute_type="int8")
-    return _whisper_models[model_size]
-
-
 def _transcribe_audio(url: str, model_size: str) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         audio_path = download_audio(url, Path(tmp))
-        model = _whisper_model(model_size)
+        try:
+            model = get_whisper_model(model_size)
+        except SttUnavailableError as exc:
+            raise TranscriptFetchError(
+                f"{exc} (needed to transcribe videos that have no captions)."
+            ) from exc
         segments, _ = model.transcribe(str(audio_path))
         return " ".join(segment.text.strip() for segment in segments)
 

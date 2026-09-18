@@ -1,8 +1,6 @@
 import { Mic, Sparkles } from "lucide-react";
 import { colorsFor } from "../utils/gradient";
 import { coverUrlFor } from "../utils/gameTileVisuals";
-import { useAppStore } from "../stores/useAppStore";
-import { hasAudioInputCapability } from "../utils/voiceMode";
 import { PersonaAvatar } from "./PersonaAvatar";
 import { PersonaMenu } from "./PersonaMenu";
 import type { Game } from "../types";
@@ -11,10 +9,9 @@ interface GameCardProps {
   game: Game;
   onStart: () => void;
   /** Landing straight on VoiceCallPage instead of a normal chat - the mic
-   * button below only renders when this is given AND the persona's model
-   * actually supports voice mode (same hasAudioInputCapability check
-   * ChatPage's own "Voice mode" switch uses), so a card never offers a
-   * mode the persona can't do. */
+   * button below renders whenever this is given: voice mode is available
+   * for every persona (non-audio models fall back to local Whisper
+   * transcription server-side - see docs/ARCHITECTURE.md's "Voice mode"). */
   onStartVoice?: () => void;
 }
 
@@ -22,8 +19,7 @@ export function GameCard({ game, onStart, onStartVoice }: GameCardProps) {
   const [from] = colorsFor(game.id);
   const [badgeTag, ...restTags] = game.tags;
   const coverUrl = coverUrlFor(game.id, game.cover_image);
-  const models = useAppStore((s) => s.models);
-  const canStartVoice = !!onStartVoice && hasAudioInputCapability(game.provider, game.model, models);
+  const canStartVoice = !!onStartVoice;
 
   return (
     <div className="group relative aspect-[4/5] w-full">

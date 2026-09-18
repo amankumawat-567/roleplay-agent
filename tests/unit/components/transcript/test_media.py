@@ -162,15 +162,20 @@ def test_fetch_transcript_raises_when_nothing_found(monkeypatch):
         fetch_transcript("https://example.com/silent.mp4", max_chars=1000)
 
 
-def test_whisper_model_missing_dependency_raises_clear_error(monkeypatch):
+def test_transcribe_audio_wraps_missing_whisper_dependency(monkeypatch, tmp_path):
     # faster-whisper is an optional extra (`pip install '.[transcribe]'`) -
     # simulate it being absent regardless of whether this environment
     # happens to have it installed (sys.modules[name] = None makes the
     # import raise ModuleNotFoundError, same as a real missing package).
     import sys
 
+    from roleplay_agent.services.stt import whisper as stt_whisper
+
+    audio_path = tmp_path / "audio.wav"
+    audio_path.write_bytes(b"RIFF")
+    monkeypatch.setattr(media_module, "download_audio", lambda url, tmp_dir: audio_path)
     monkeypatch.setitem(sys.modules, "faster_whisper", None)
-    media_module._whisper_models.clear()
+    stt_whisper._whisper_models.clear()
 
     with pytest.raises(TranscriptFetchError, match="pip install"):
-        media_module._whisper_model("base")
+        media_module._transcribe_audio("https://example.com/clip.mp4", "base")

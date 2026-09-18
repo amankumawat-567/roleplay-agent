@@ -994,6 +994,28 @@ in-character dialogue with sensible `delivery` notes, and the session's
 messages/title persisted exactly as a real turn should. `npx tsc -b
 --noEmit` and `npm run build` both pass with the new frontend code.
 
+**Shipped - local Whisper fallback for non-audio models**: F0-F4 above
+assumed a model that could actually hear the clip. Every other model
+(every hosted provider, every non-audio Ollama model) now gets a second
+path instead of a hard 422: `/voice-turn` transcribes the clip locally with
+`services/stt/whisper.py`'s `transcribe_wav_bytes` (faster-whisper, the
+same optional `transcribe` extra and `whisper_model_size` config
+Section A3's media-transcript fallback already used - one shared model
+cache, so the two features loading the same model_size don't each pay for
+a separate loaded instance) and sends the resulting text instead of the
+raw audio. `agent/voice.py`'s `generate_voice_turn` grew a `transcript`
+parameter alongside its original `audio` one: given a transcript, `user_said`
+is just that transcript (no reason to ask the model to re-transcribe what
+it was just handed verbatim) and the model is only asked for a new
+`VoiceReply` schema's `segments`, wrapped back into a `VoiceTurn` for a
+uniform return type. The frontend's "Voice mode" switch/card
+button/dictation-hiding are consequently no longer gated on
+`AUDIO_INPUT_CAPABILITY` at all (`utils/voiceMode.ts`'s
+`hasAudioInputCapability` is gone) - voice mode is offered for every
+persona, and a missing-`faster-whisper` 422 surfaces through
+`VoiceCallPage.tsx`'s existing error banner exactly the way a missing-TTS
+failure already does elsewhere in the app.
+
 **Still genuinely open, not blocking anything above**: whether Ollama's
 audio-input support is specific to the MLX engine/safetensors checkpoints
 (the release notes' own framing) or works generally for GGUF checkpoints

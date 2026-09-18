@@ -36,6 +36,7 @@ from roleplay_agent.services.llm.errors import describe_llm_error
 from roleplay_agent.services.llm.providers import ProviderConfigError
 from roleplay_agent.services.storage.models import Session
 from roleplay_agent.services.storage.repositories import SettingsRepository
+from roleplay_agent.services.stt import SttUnavailableError, transcribe_wav_bytes
 from roleplay_agent.services.tts import TtsError
 
 router = APIRouter(prefix="/api/sessions", tags=["chat"])
@@ -239,17 +240,17 @@ async def voice_turn(
     settings_repo: SettingsRepository = Depends(get_settings_repo),
 ):
     """Section F's voice mode end to end (F3 - see docs/ARCHITECTURE.md's
-    "Voice mode"): `audio` is the turn's raw mic
-    capture as a WAV file, sent straight to the model (agent.voice's
-    to_audio_message/generate_voice_turn) rather than transcribed first
-    (F0). 422 when this persona's model can't actually take audio - the
-    same "config fact, not a service outage" shape as /speak's missing-voice
-    422 above, so the frontend can gate the voice-mode switch on the same
-    check without duplicating it (see llm.capabilities.has_capability)."""
+    "Voice mode"): `audio` is the turn's raw mic capture as a WAV file. A
+    model that reports AUDIO_INPUT_CAPABILITY hears it directly (agent.voice's
+    to_audio_message/generate_voice_turn); every other model gets it
+    transcribed locally first (services.stt.whisper) and only the resulting
+    text is sent - see agent/voice.py's own docstring for why. 422 when
+    transcription is needed but faster-whisper isn't installed, or when the
+    clip transcribes to nothing - the same "config fact, not a service
+    outage" shape as /speak's missing-voice 422 above."""
     game = get_game_or_404(session.game_id)
     providers = get_available_models(settings_repo)
-    if not has_capability(providers, game.provider, game.model, AUDIO_INPUT_CAPABILITY):
-        raise HTTPException(422, "This persona's model can't take audio input.")
+    audio_capable = has_capability(providers, game.provider, game.model, AUDIO_INPUT_CAPABILITY)
 
     num_ctx = _num_ctx_for(game, app_config)
     session_repo = get_session_repo()
@@ -258,16 +259,28 @@ async def voice_turn(
     system_prompt = build_voice_system_prompt(game, summary)
     audio_bytes = await audio.read()
 
+    generate_kwargs: dict[str, bytes | str]
+    if audio_capable:
+        generate_kwargs = {"audio": audio_bytes}
+    else:
+        try:
+            transcript = await asyncio.to_thread(transcribe_wav_bytes, audio_bytes, app_config.whisper_model_size)
+        except SttUnavailableError as exc:
+            raise HTTPException(422, str(exc))
+        if not transcript.strip():
+            raise HTTPException(422, "Couldn't hear anything in that clip.")
+        generate_kwargs = {"transcript": transcript}
+
     try:
         turn = await asyncio.to_thread(
             generate_voice_turn,
             system_prompt,
             recent,
-            audio_bytes,
             game.provider,
             game.model,
             num_ctx,
             app_config.keep_alive,
+            **generate_kwargs,
         )
     except (httpx.TransportError, ResponseError) as exc:
         logger.error("voice turn failed session=%s: %s", session.id, exc)

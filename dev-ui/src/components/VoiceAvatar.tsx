@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { gradientFor } from "../utils/gradient";
 
-/** A real illustrated avatar per voice, generated via Draftbit's Personas
- * (https://github.com/draftbit/avatar-generator, MIT licensed;
+/** A voice's avatar is a hand-picked SVG
  * personas.draftbit.com/api/avatar.svg for a specific trait combination)
  * and vendored once as a static file under public/voice-avatars/ rather
  * than called live: this app otherwise never depends on an external
