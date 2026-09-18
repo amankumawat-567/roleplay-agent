@@ -21,7 +21,11 @@ data/voice_samples/
 # design reference screenshots/video, not source
 ref/
 .playwright-mcp/
+
+#code editors
 .kilo/
+.claude/
+.vscode/
 
 # runtime log output, not source
 logs/
