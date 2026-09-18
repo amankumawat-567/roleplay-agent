@@ -55,6 +55,11 @@ export function LibraryPage() {
     if (sessionId) navigate(`/chat/${sessionId}`);
   }
 
+  function openGameVoice(gameId: string) {
+    const sessionId = latestSessionByGame.get(gameId);
+    if (sessionId) navigate(`/chat/${sessionId}/voice`);
+  }
+
   return (
     <div className="relative h-full flex-1 overflow-y-auto px-6 py-10">
       <TopBar />
@@ -123,6 +128,7 @@ export function LibraryPage() {
                     <LibraryCard
                       entry={entry}
                       onClick={() => openGame(entry.id)}
+                      onStartVoice={() => openGameVoice(entry.id)}
                       onDeleted={() => setLibrary((prev) => prev?.filter((e) => e.id !== entry.id) ?? null)}
                     />
                   </div>

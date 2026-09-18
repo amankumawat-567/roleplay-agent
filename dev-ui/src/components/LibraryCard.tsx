@@ -1,4 +1,4 @@
-import { Clock, Repeat2, Timer } from "lucide-react";
+import { Clock, Mic, Repeat2, Timer } from "lucide-react";
 import { iconFor, accentFor, coverUrlFor } from "../utils/gameTileVisuals";
 import { formatLastPlayed, formatPlayedTime } from "../utils/playStats";
 import { PersonaMenu } from "./PersonaMenu";
@@ -7,6 +7,10 @@ import type { LibraryEntry } from "../types";
 interface LibraryCardProps {
   entry: LibraryEntry;
   onClick: () => void;
+  /** Landing straight on VoiceCallPage instead of a normal chat - the mic
+   * button below renders whenever this is given (see GameCard's identical
+   * prop for the full rationale). */
+  onStartVoice?: () => void;
   /** Called after this persona is deleted via the corner menu - LibraryPage
    * fetches its own `library` list independent of the app-wide store, so
    * it needs its own way to drop the now-gone entry. */
@@ -19,7 +23,8 @@ interface LibraryCardProps {
  * you've done with a persona, not just its description. A `<div>` wrapping
  * an inner click-target `<button>` (not one outer button), so the corner
  * `PersonaMenu`'s own button can sit beside it without nesting buttons. */
-export function LibraryCard({ entry, onClick, onDeleted }: LibraryCardProps) {
+export function LibraryCard({ entry, onClick, onStartVoice, onDeleted }: LibraryCardProps) {
+  const canStartVoice = !!onStartVoice;
   const Icon = iconFor(entry.id);
   const accent = accentFor(entry.id);
   const coverUrl = coverUrlFor(entry.id, entry.cover_image);
@@ -74,7 +79,19 @@ export function LibraryCard({ entry, onClick, onDeleted }: LibraryCardProps) {
         </div>
       </button>
 
-      <div className="absolute right-3 top-3 z-10 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+      <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+        {canStartVoice && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartVoice?.();
+            }}
+            title="Start in voice mode"
+            className="rounded-full bg-black/40 p-1.5 text-white/80 backdrop-blur-md transition hover:bg-black/60 hover:text-white"
+          >
+            <Mic size={14} aria-hidden="true" />
+          </button>
+        )}
         <PersonaMenu
           game={entry}
           onDeleted={onDeleted}

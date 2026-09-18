@@ -55,7 +55,15 @@ function TagPill({
 const STAGE_HEIGHT = "h-[300px] sm:h-[400px]";
 const CARD_SIZE = "w-56 sm:w-72";
 
-function FeaturedCarousel({ games, onStart }: { games: Game[]; onStart: (id: string) => void }) {
+function FeaturedCarousel({
+  games,
+  onStart,
+  onStartVoice,
+}: {
+  games: Game[];
+  onStart: (id: string) => void;
+  onStartVoice: (id: string) => void;
+}) {
   const center = Math.floor(games.length / 2);
 
   return (
@@ -86,6 +94,7 @@ function FeaturedCarousel({ games, onStart }: { games: Game[]; onStart: (id: str
               badge={game.tags[0] ?? "Persona"}
               accent={accentFor(game.id)}
               onClick={() => onStart(game.id)}
+              onStartVoice={() => onStartVoice(game.id)}
               game={game}
             />
             {isCenter && (
@@ -244,7 +253,11 @@ export function ExplorePage() {
                 }`}
               >
                 <div className="animate-fade-up" style={{ animationDelay: "80ms" }}>
-                  <FeaturedCarousel games={rotatedFeatured} onStart={startChat} />
+                  <FeaturedCarousel
+                    games={rotatedFeatured}
+                    onStart={startChat}
+                    onStartVoice={(id) => startChat(id, { voice: true })}
+                  />
                 </div>
 
                 {featured.length > 1 && (
@@ -317,6 +330,7 @@ export function ExplorePage() {
                       badge={game.tags[0] ?? "Persona"}
                       accent={accentFor(game.id)}
                       onClick={() => startChat(game.id)}
+                      onStartVoice={() => startChat(game.id, { voice: true })}
                       game={game}
                     />
                   ))}

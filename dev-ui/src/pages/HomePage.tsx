@@ -78,6 +78,7 @@ export function HomePage() {
                   accent={accentFor(game.id)}
                   coverUrl={coverUrlFor(game.id, game.cover_image)}
                   onClick={() => startChat(game.id)}
+                  onStartVoice={() => startChat(game.id, { voice: true })}
                   game={game}
                 />
               </div>
