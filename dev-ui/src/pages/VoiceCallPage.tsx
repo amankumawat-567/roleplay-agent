@@ -41,6 +41,10 @@ export function VoiceCallPage() {
   // which segment's player is live, rather than a new ref per segment.
   const playbackLevelRef = useRef(0);
   const activePlayerRef = useRef<PcmStreamPlayer | null>(null);
+  // playSegments' own auto-listen call (see its tail below) runs after an
+  // await - guards against opening a mic no one will ever close if the
+  // user has already navigated away from this screen by then.
+  const mountedRef = useRef(true);
 
   // A schedule_followup check-back (agent/followups.py) landing while the
   // user is in voice mode - there's no message list here to just show it
@@ -127,6 +131,7 @@ export function VoiceCallPage() {
 
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       // Don't let the persona keep talking after the user has left this
       // screen (navigated to text mode, ended the call, ...).
       activePlayerRef.current?.stop();
@@ -172,35 +177,70 @@ export function VoiceCallPage() {
     }
     setPhase("idle");
     setCaption(IDLE_CAPTION);
+    // Hands-free by default: the moment the persona stops talking, it's
+    // the user's turn - open the mic instead of waiting for a tap. Covers
+    // every playSegments() caller (the opening turn above, a resumed
+    // starter:"ai" line, and a spoken followup check-back) uniformly,
+    // rather than each call site remembering to do this itself.
+    if (mountedRef.current) await beginListening();
+  }
+
+  /** Shared by both endpointing paths - the VAD-driven auto-stop below and
+   * a manual tap while recording - so a clip's fate (discard vs. send to
+   * voiceTurn) is decided in exactly one place. `clip` is null for either
+   * an empty manual recording or a VAD auto-stop that never heard real
+   * speech (see handleAutoStop) - both just fall silently back to idle. */
+  async function finishRecording(clip: Blob | null) {
+    if (!clip || !sessionId) {
+      setPhase("idle");
+      setCaption(IDLE_CAPTION);
+      return;
+    }
+    setPhase("thinking");
+    setCaption("…");
+    try {
+      const turn = await api.voiceTurn(sessionId, clip);
+      await playSegments(turn.segments);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong talking to the model.");
+      setPhase("idle");
+      setCaption(IDLE_CAPTION);
+    }
+  }
+
+  /** useWavRecorder's energy-based endpointer (see its own module docstring
+   * for the VAD rules/thresholds) decided the user is done talking - or
+   * gave up because they never started. Always calls stop() first to
+   * actually release the mic/tracks regardless of which; `hadSpeech` only
+   * decides whether the resulting clip is worth sending on. */
+  function handleAutoStop(hadSpeech: boolean) {
+    const clip = stop();
+    if (!mountedRef.current) return;
+    void finishRecording(hadSpeech ? clip : null);
+  }
+
+  async function beginListening() {
+    setError(null);
+    const started = await start(handleAutoStop);
+    if (!mountedRef.current) {
+      if (started) stop();
+      return;
+    }
+    if (!started) return;
+    setPhase("recording");
+    setCaption("Listening…");
   }
 
   async function handleMicTap() {
     if (phase === "recording") {
-      const clip = stop();
-      if (!clip || !sessionId) {
-        setPhase("idle");
-        setCaption(IDLE_CAPTION);
-        return;
-      }
-      setPhase("thinking");
-      setCaption("…");
-      try {
-        const turn = await api.voiceTurn(sessionId, clip);
-        await playSegments(turn.segments);
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Something went wrong talking to the model.");
-        setPhase("idle");
-        setCaption(IDLE_CAPTION);
-      }
+      // A manual tap-to-stop early, ahead of whatever the auto-endpointer
+      // would have decided on its own.
+      await finishRecording(stop());
       return;
     }
 
     if (phase !== "idle") return; // busy thinking/speaking - ignore a stray tap
-    setError(null);
-    const started = await start();
-    if (!started) return;
-    setPhase("recording");
-    setCaption("Listening…");
+    await beginListening();
   }
 
   const micLabel = phase === "recording" ? "Stop and send" : phase === "idle" ? "Talk" : "Please wait";

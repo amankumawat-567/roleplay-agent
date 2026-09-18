@@ -55,8 +55,11 @@ interface WavRecorder {
    * `error` set) on permission denial or no available device. Returning a
    * value directly, rather than making the caller read `error` off this
    * same render's stale closure right after awaiting, is what makes it
-   * safe to branch on immediately. */
-  start: () => Promise<boolean>;
+   * safe to branch on immediately. `onAutoStop`, if given, fires exactly
+   * once (with whether real speech was ever detected) when the built-in
+   * energy-based endpointer above decides the user is done talking - see
+   * the module-level VAD constants and the module docstring. */
+  start: (onAutoStop?: (hadSpeech: boolean) => void) => Promise<boolean>;
   /** Stops capture and returns the recorded clip as a WAV Blob - null if
    * nothing was ever recording, or the clip was empty. */
   stop: () => Blob | null;
@@ -68,13 +71,46 @@ interface WavRecorder {
   levelRef: RefObject<number>;
 }
 
-/** Push-to-talk mic capture for voice mode (see docs/roadmap.md F3 - "push-
- * to-talk vs. always-listening is a UX call to make when this is actually
- * built": push-to-talk wins here, no voice-activity-detection/silence-
- * trimming complexity for a local single-user app). Uses a ScriptProcessorNode
- * rather than an AudioWorklet - deprecated, but universally supported with
- * no separate worklet-module bundling, and this app only ever has one
- * capture running at a time. */
+// Energy-based endpointing thresholds (VoiceCallPage's auto-listen mode -
+// see docs/roadmap.md F3). Raw per-buffer RMS, not the smoothed/scaled
+// `levelRef` above (that 0.6-smoothed, *6-scaled value is tuned for a
+// pleasant-looking orb pulse, not for a crisp speech/silence decision).
+// These are reasonable starting points, not live-tuned against real mic
+// hardware/room noise - the first thing to adjust if auto-stop clips words
+// (raise SILENCE_HANGOVER_MS or lower the RMS threshold) or lingers too
+// long after the user stops talking (lower SILENCE_HANGOVER_MS).
+const SPEECH_RMS_THRESHOLD = 0.02;
+// Consecutive above-threshold buffers required before we count speech as
+// having actually started - one ~90ms buffer's audio pop/click shouldn't
+// arm the endpointer. 3 buffers is ~250-280ms, in line with the "ignore
+// blips under 200-300ms" guidance VoiceCallPage's auto-stop is built from.
+const MIN_SPEECH_BUFFERS = 3;
+// How long a silence has to last after speech was detected before
+// concluding the user is done talking - the single most important tunable
+// here. Under ~400ms reads as the app cutting the user off mid-sentence;
+// over ~1s starts feeling laggy. 800ms sits in the middle of that range.
+const SILENCE_HANGOVER_MS = 800;
+// If nothing ever crosses the speech threshold at all (mic opened but the
+// user never spoke - e.g. they got distracted), give up and auto-close
+// rather than holding the mic open indefinitely.
+const NO_SPEECH_TIMEOUT_MS = 6000;
+// Hard cap regardless of VAD state - a safety valve against a stuck-open
+// mic if the endpointer's threshold/hangover logic ever fails to fire.
+const MAX_RECORDING_MS = 45000;
+
+/** Mic capture for voice mode (see docs/roadmap.md F3), auto-endpointed by
+ * default: `start()` takes an optional `onAutoStop` callback that fires
+ * once - with whether real speech was ever detected - when the energy-
+ * based VAD above decides the user is done talking (or gave up), so a
+ * caller doesn't have to run its own silence-detection loop; passing none
+ * makes this a plain push-to-talk recorder (the caller decides when to
+ * stop, as originally built - see docs/roadmap.md F3's now-superseded
+ * "push-to-talk vs. always-listening" call). `onAutoStop` only ever
+ * signals; it doesn't call stop() itself, so the caller stays in charge of
+ * the actual teardown + when/whether to send the clip (see VoiceCallPage's
+ * handleAutoStop). Uses a ScriptProcessorNode rather than an AudioWorklet -
+ * deprecated, but universally supported with no separate worklet-module
+ * bundling, and this app only ever has one capture running at a time. */
 export function useWavRecorder(): WavRecorder {
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,8 +121,16 @@ export function useWavRecorder(): WavRecorder {
   const silentGainRef = useRef<GainNode | null>(null);
   const chunksRef = useRef<Float32Array[]>([]);
   const levelRef = useRef(0);
+  // Endpointing state, reset per start() call - see the VAD constants
+  // above and their use in onaudioprocess below.
+  const onAutoStopRef = useRef<((hadSpeech: boolean) => void) | null>(null);
+  const autoStopFiredRef = useRef(false);
+  const hasSpeechRef = useRef(false);
+  const speechBufferStreakRef = useRef(0);
+  const lastSpeechAtRef = useRef(0);
+  const startedAtRef = useRef(0);
 
-  async function start(): Promise<boolean> {
+  async function start(onAutoStop?: (hadSpeech: boolean) => void): Promise<boolean> {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -101,6 +145,12 @@ export function useWavRecorder(): WavRecorder {
 
       chunksRef.current = [];
       levelRef.current = 0;
+      onAutoStopRef.current = onAutoStop ?? null;
+      autoStopFiredRef.current = false;
+      hasSpeechRef.current = false;
+      speechBufferStreakRef.current = 0;
+      lastSpeechAtRef.current = 0;
+      startedAtRef.current = performance.now();
       processor.onaudioprocess = (e) => {
         const data = e.inputBuffer.getChannelData(0);
         chunksRef.current.push(new Float32Array(data));
@@ -114,6 +164,25 @@ export function useWavRecorder(): WavRecorder {
         // keeps the reactive pulse from looking jittery between buffers.
         const target = Math.min(1, rms * 6);
         levelRef.current += (target - levelRef.current) * 0.6;
+
+        if (!onAutoStopRef.current || autoStopFiredRef.current) return;
+        const now = performance.now();
+        if (rms >= SPEECH_RMS_THRESHOLD) {
+          speechBufferStreakRef.current += 1;
+          if (speechBufferStreakRef.current >= MIN_SPEECH_BUFFERS) hasSpeechRef.current = true;
+          if (hasSpeechRef.current) lastSpeechAtRef.current = now;
+        } else {
+          speechBufferStreakRef.current = 0;
+        }
+
+        const elapsedSinceStart = now - startedAtRef.current;
+        const shouldStop = hasSpeechRef.current
+          ? now - lastSpeechAtRef.current >= SILENCE_HANGOVER_MS || elapsedSinceStart >= MAX_RECORDING_MS
+          : elapsedSinceStart >= NO_SPEECH_TIMEOUT_MS;
+        if (shouldStop) {
+          autoStopFiredRef.current = true;
+          onAutoStopRef.current(hasSpeechRef.current);
+        }
       };
       source.connect(processor);
       processor.connect(silentGain);
@@ -140,6 +209,13 @@ export function useWavRecorder(): WavRecorder {
   function stop(): Blob | null {
     const audioCtx = audioCtxRef.current;
     const sampleRate = audioCtx?.sampleRate ?? 44100;
+
+    // Belt-and-suspenders against a queued onaudioprocess callback firing
+    // between disconnect() below and the node actually tearing down - stop()
+    // is about to hand the caller a final answer, an auto-stop callback
+    // firing after that would be a stale, meaningless second signal.
+    autoStopFiredRef.current = true;
+    onAutoStopRef.current = null;
 
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();

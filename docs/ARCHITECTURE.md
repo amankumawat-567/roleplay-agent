@@ -1046,16 +1046,33 @@ structured non-streamed output anyway), so "threading audio through `ChatState`"
 turned out to mean *not* touching `ChatState` at all, just giving the
 parallel path its own `audio: bytes` parameter.
 
-On the frontend, `hooks/useWavRecorder.ts` captures push-to-talk mic audio
-via a `ScriptProcessorNode` (deprecated but universally supported, no
-separate AudioWorklet module to bundle - this app only ever has one
-capture running at a time) routed through a zero-gain node before
-`destination` so the user never hears their own mic looped back, then
-hand-encodes the buffered Float32 samples as a 16-bit PCM WAV `Blob` on
-stop (browsers' `MediaRecorder` doesn't produce WAV directly). Push-to-talk,
-not always-listening - F3's own note that this was "a UX call to make when
-this is actually built" - avoids voice-activity-detection/silence-trimming
-complexity for what's still a local single-user app.
+On the frontend, `hooks/useWavRecorder.ts` captures mic audio via a
+`ScriptProcessorNode` (deprecated but universally supported, no separate
+AudioWorklet module to bundle - this app only ever has one capture running
+at a time) routed through a zero-gain node before `destination` so the
+user never hears their own mic looped back, then hand-encodes the buffered
+Float32 samples as a 16-bit PCM WAV `Blob` on stop (browsers' `MediaRecorder`
+doesn't produce WAV directly).
+
+**Superseded - auto-listen endpointing**: F3's original note that push-to-
+talk (not always-listening) "avoids voice-activity-detection/silence-
+trimming complexity for what's still a local single-user app" held only
+until the hands-free UX was actually wanted. `useWavRecorder` now runs a
+semi-duplex energy-based VAD directly off the same per-buffer RMS the level
+meter already computed (no new dependency): `start()` takes an optional
+`onAutoStop(hadSpeech)` callback that fires once - after `SILENCE_HANGOVER_MS`
+(800ms) of quiet following detected speech, after `NO_SPEECH_TIMEOUT_MS`
+(6s) with no speech at all, or at the `MAX_RECORDING_MS` (45s) hard cap -
+leaving the caller to actually call `stop()` and decide the clip's fate.
+Deliberately not full-duplex/barge-in: the mic only ever opens once the
+persona's own TTS playback has fully finished (`VoiceCallPage.tsx`'s
+`playSegments` calls `beginListening()` in its own tail, covering the
+opening turn, a resumed starter reply, and a spoken followup check-back
+uniformly), never while it's speaking - avoiding the acoustic-echo-
+cancellation problem a mic left open during local TTS playback would
+otherwise create. `handleMicTap` still works as a manual override (tap to
+start, or tap to stop early ahead of whatever the endpointer would have
+decided).
 
 **Shipped - F4, the screen**: `pages/VoiceCallPage.tsx` at
 `/chat/:sessionId/voice` - no new visual asset, `HeroOrb` doubles as the
