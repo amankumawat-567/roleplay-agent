@@ -56,7 +56,7 @@ def test_transcribe_file_strips_the_pipeline_result_text(monkeypatch):
             assert path.endswith(".wav")
             return {"text": "  hello world  "}
 
-    monkeypatch.setattr(stt_module, "get_pipeline", lambda model_repo: _FakePipeline())
+    monkeypatch.setattr(stt_module, "get_pipeline", lambda model_repo, quantize=None: _FakePipeline())
 
     result = transcribe_file(Path("/tmp/clip.wav"), "openai/whisper-tiny")
 
@@ -66,17 +66,117 @@ def test_transcribe_file_strips_the_pipeline_result_text(monkeypatch):
 def test_transcribe_wav_bytes_writes_a_temp_file_and_delegates(monkeypatch):
     captured = {}
 
-    def fake_transcribe_file(path, model_repo):
+    def fake_transcribe_file(path, model_repo, quantize=None):
         captured["exists"] = path.exists()
         captured["contents"] = path.read_bytes()
         captured["model_repo"] = model_repo
+        captured["quantize"] = quantize
         return "some text"
 
     monkeypatch.setattr(stt_module, "transcribe_file", fake_transcribe_file)
 
-    result = transcribe_wav_bytes(b"RIFF....WAVEfmt ", "openai/whisper-tiny")
+    result = transcribe_wav_bytes(b"RIFF....WAVEfmt ", "openai/whisper-tiny", "int8")
 
     assert result == "some text"
     assert captured["exists"] is True
     assert captured["contents"] == b"RIFF....WAVEfmt "
     assert captured["model_repo"] == "openai/whisper-tiny"
+    assert captured["quantize"] == "int8"
+
+
+def test_get_pipeline_int8_quantizes_on_cpu(monkeypatch):
+    def fake_pipeline(task, model, device):
+        return type("P", (), {"model": "fp32-model"})()
+
+    quantize_calls = []
+
+    class _FakeTorch:
+        class cuda:
+            @staticmethod
+            def is_available():
+                return False
+
+        class backends:
+            class mps:
+                @staticmethod
+                def is_available():
+                    return False
+
+        class nn:
+            class Linear:
+                pass
+
+        class ao:
+            class quantization:
+                @staticmethod
+                def quantize_dynamic(model, layers, dtype):
+                    quantize_calls.append((model, dtype))
+                    return "int8-model"
+
+        qint8 = "qint8-dtype"
+
+    monkeypatch.setitem(sys.modules, "transformers", type("M", (), {"pipeline": staticmethod(fake_pipeline)}))
+    monkeypatch.setitem(sys.modules, "torch", _FakeTorch)
+    stt_module._pipelines.clear()
+
+    pipe = get_pipeline("openai/whisper-tiny", "int8")
+
+    assert pipe.model == "int8-model"
+    assert quantize_calls == [("fp32-model", "qint8-dtype")]
+
+
+def test_get_pipeline_int8_skipped_off_cpu(monkeypatch):
+    def fake_pipeline(task, model, device):
+        return type("P", (), {"model": "fp32-model"})()
+
+    class _FakeTorch:
+        class cuda:
+            @staticmethod
+            def is_available():
+                return True
+
+        class backends:
+            class mps:
+                @staticmethod
+                def is_available():
+                    return False
+
+    monkeypatch.setitem(sys.modules, "transformers", type("M", (), {"pipeline": staticmethod(fake_pipeline)}))
+    monkeypatch.setitem(sys.modules, "torch", _FakeTorch)
+    stt_module._pipelines.clear()
+
+    pipe = get_pipeline("openai/whisper-tiny", "int8")
+
+    assert pipe.model == "fp32-model"
+
+
+def test_get_pipeline_caches_per_model_repo_and_quantize(monkeypatch):
+    calls = []
+
+    def fake_pipeline(task, model, device):
+        calls.append(model)
+        return type("P", (), {"model": "fp32-model"})()
+
+    class _FakeTorch:
+        class cuda:
+            @staticmethod
+            def is_available():
+                return True
+
+        class backends:
+            class mps:
+                @staticmethod
+                def is_available():
+                    return False
+
+    monkeypatch.setitem(sys.modules, "transformers", type("M", (), {"pipeline": staticmethod(fake_pipeline)}))
+    monkeypatch.setitem(sys.modules, "torch", _FakeTorch)
+    stt_module._pipelines.clear()
+
+    plain = get_pipeline("openai/whisper-tiny")
+    quantized = get_pipeline("openai/whisper-tiny", "int8")
+    plain_again = get_pipeline("openai/whisper-tiny")
+
+    assert plain is plain_again
+    assert plain is not quantized
+    assert calls == ["openai/whisper-tiny", "openai/whisper-tiny"]

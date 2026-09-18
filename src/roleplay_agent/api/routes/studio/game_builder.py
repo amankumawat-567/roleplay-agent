@@ -123,7 +123,9 @@ def builder_draft_from_transcript(body: TranscriptDraftRequest):
 def builder_draft_from_video(body: VideoDraftRequest):
     app_config = get_app_config()
     try:
-        transcript = fetch_transcript(body.url, app_config.transcript_max_chars, app_config.stt_model_repo)
+        transcript = fetch_transcript(
+            body.url, app_config.transcript_max_chars, app_config.stt_model_repo, app_config.stt_quantize
+        )
     except TranscriptFetchError as exc:
         raise HTTPException(422, str(exc))
     return generate_draft_from_transcript(transcript, _resolved(get_settings_repo(), app_config))

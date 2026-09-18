@@ -287,7 +287,7 @@ async def voice_turn(
     else:
         try:
             transcript = await asyncio.to_thread(
-                stt_module.transcribe_wav_bytes, audio_bytes, app_config.stt_model_repo
+                stt_module.transcribe_wav_bytes, audio_bytes, app_config.stt_model_repo, app_config.stt_quantize
             )
         except SttUnavailableError as exc:
             raise HTTPException(422, str(exc))

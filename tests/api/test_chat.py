@@ -528,7 +528,7 @@ def test_voice_turn_422_when_whisper_not_installed(client, app_env, monkeypatch)
 
     _patch_no_audio_ollama(monkeypatch)
 
-    def fake_transcribe(audio, model_repo):
+    def fake_transcribe(audio, model_repo, quantize=None):
         raise SttUnavailableError("transformers isn't installed - run `pip install '.[transcribe]'`.")
 
     monkeypatch.setattr(chat_route.stt_module, "transcribe_wav_bytes", fake_transcribe)
@@ -548,7 +548,7 @@ def test_voice_turn_422_when_transcript_is_empty(client, app_env, monkeypatch):
     from roleplay_agent.api.routes.gameplay import chat as chat_route
 
     _patch_no_audio_ollama(monkeypatch)
-    monkeypatch.setattr(chat_route.stt_module, "transcribe_wav_bytes", lambda audio, model_repo: "   ")
+    monkeypatch.setattr(chat_route.stt_module, "transcribe_wav_bytes", lambda audio, model_repo, quantize=None: "   ")
     write_game(app_env / "games", "alpha", model="llama3.1")
     session_id = client.post("/api/sessions", json={"game_id": "alpha"}).json()["session_id"]
 
@@ -570,9 +570,10 @@ def test_voice_turn_transcribes_locally_for_a_non_audio_model(client, app_env, m
 
     captured = {}
 
-    def fake_transcribe(audio, model_repo):
+    def fake_transcribe(audio, model_repo, quantize=None):
         captured["audio"] = audio
         captured["model_repo"] = model_repo
+        captured["quantize"] = quantize
         return "what's the plan for tonight"
 
     def fake_generate_voice_turn(

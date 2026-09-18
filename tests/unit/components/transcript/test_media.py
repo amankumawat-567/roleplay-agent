@@ -134,7 +134,7 @@ def test_fetch_transcript_uses_captions_when_available(monkeypatch):
 
 def test_fetch_transcript_falls_back_to_stt_when_no_captions(monkeypatch):
     _patch_yt_dlp(monkeypatch, _FakeYoutubeDL(info={}))
-    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_repo: "spoken words here")
+    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_repo, quantize=None: "spoken words here")
 
     result = fetch_transcript("https://example.com/clip.mp4", max_chars=1000, model_repo=_MODEL_REPO)
 
@@ -143,7 +143,7 @@ def test_fetch_transcript_falls_back_to_stt_when_no_captions(monkeypatch):
 
 def test_fetch_transcript_truncates_to_max_chars(monkeypatch):
     _patch_yt_dlp(monkeypatch, _FakeYoutubeDL(info={}))
-    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_repo: "x" * 100)
+    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_repo, quantize=None: "x" * 100)
 
     result = fetch_transcript("https://example.com/clip.mp4", max_chars=10, model_repo=_MODEL_REPO)
 
@@ -159,7 +159,7 @@ def test_fetch_transcript_wraps_probe_errors(monkeypatch):
 
 def test_fetch_transcript_raises_when_nothing_found(monkeypatch):
     _patch_yt_dlp(monkeypatch, _FakeYoutubeDL(info={}))
-    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_repo: "")
+    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_repo, quantize=None: "")
 
     with pytest.raises(TranscriptFetchError):
         fetch_transcript("https://example.com/silent.mp4", max_chars=1000, model_repo=_MODEL_REPO)

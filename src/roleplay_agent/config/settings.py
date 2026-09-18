@@ -61,6 +61,8 @@ def _yaml_defaults() -> dict:
         merged["transcript_max_chars"] = transcript["max_chars"]
     if "model_repo" in transcript:
         merged["stt_model_repo"] = transcript["model_repo"]
+    if "quantize" in transcript:
+        merged["stt_quantize"] = transcript["quantize"]
 
     tts = _load_yaml("tts.yaml")
     if "backend" in tts:
@@ -165,6 +167,11 @@ class AppConfig(BaseModel):
     # is always auto-detected (services/stt/stt.py's _detect_device), never
     # a config field here.
     stt_model_repo: str
+    # int8 | None. Dynamic PyTorch quantization of the pipeline model's
+    # Linear layers - see services/stt/stt.py's get_pipeline. Optional
+    # (unlike stt_model_repo above): quantization is a perf tweak, not
+    # something the app requires a value for.
+    stt_quantize: str | None = None
 
     # Section C - local TTS (see services/tts/tts.py). Which of the two
     # backends below is actually used - "chatterbox" or "qwen3". No

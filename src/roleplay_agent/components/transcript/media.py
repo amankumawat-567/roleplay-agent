@@ -157,26 +157,27 @@ def _fetch_caption_text(sub_url: str, ext: str) -> str:
     return _parse_json3(raw) if ext == "json3" else _parse_cue_text(raw)
 
 
-def _transcribe_audio(url: str, model_repo: str) -> str:
+def _transcribe_audio(url: str, model_repo: str, quantize: str | None = None) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         audio_path = download_audio(url, Path(tmp))
         try:
-            return transcribe_file(audio_path, model_repo)
+            return transcribe_file(audio_path, model_repo, quantize)
         except SttUnavailableError as exc:
             raise TranscriptFetchError(f"{exc} (needed to transcribe videos that have no captions).") from exc
 
 
-def fetch_transcript(url_or_id: str, max_chars: int, model_repo: str) -> str:
+def fetch_transcript(url_or_id: str, max_chars: int, model_repo: str, quantize: str | None = None) -> str:
     """Captions when they exist (near-instant), local STT transcription of
-    the downloaded audio when they don't - `model_repo` is
-    `app_config.stt_model_repo` (required, no default baked in here - see
-    that field's own docstring). Truncates to max_chars so a long source
-    can't blow the draft-generation prompt's budget."""
+    the downloaded audio when they don't - `model_repo`/`quantize` are
+    `app_config.stt_model_repo`/`app_config.stt_quantize` (model_repo
+    required, no default baked in here - see that field's own docstring).
+    Truncates to max_chars so a long source can't blow the
+    draft-generation prompt's budget."""
     url = normalize_url(url_or_id)
     info = _probe(url)
 
     track = _pick_caption_track(info)
-    text = _fetch_caption_text(*track) if track else _transcribe_audio(url, model_repo)
+    text = _fetch_caption_text(*track) if track else _transcribe_audio(url, model_repo, quantize)
 
     text = " ".join(text.split())
     if not text:

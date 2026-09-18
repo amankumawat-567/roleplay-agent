@@ -242,7 +242,7 @@ def test_builder_draft_from_video_fetches_transcript_then_drafts(client, app_env
     monkeypatch.setattr(
         game_builder_route,
         "fetch_transcript",
-        lambda url, max_chars, model_repo: calls.append((url, max_chars)) or "a fetched transcript",
+        lambda url, max_chars, model_repo, quantize=None: calls.append((url, max_chars)) or "a fetched transcript",
     )
     monkeypatch.setattr(
         game_builder_route,
@@ -261,7 +261,7 @@ def test_builder_draft_from_video_fetches_transcript_then_drafts(client, app_env
 
 
 def test_builder_draft_from_video_returns_422_on_fetch_failure(client, app_env, monkeypatch):
-    def raise_error(url, max_chars, model_repo):
+    def raise_error(url, max_chars, model_repo, quantize=None):
         raise TranscriptFetchError("No transcript found for this video")
 
     monkeypatch.setattr(game_builder_route, "fetch_transcript", raise_error)

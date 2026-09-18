@@ -14,3 +14,9 @@ max_chars: 20000
 # this machine's torch build actually supports - not a config knob, no
 # reason to make anyone guess their own hardware.
 model_repo: YOUR-SPEECH-TO-TEXT-MODEL
+# int8 | none. Dynamic PyTorch quantization of the model's Linear layers
+# only (mirrors configs/tts.yaml's chatterbox.quantize) - CPU-only, since
+# PyTorch's dynamic quantization backend doesn't support cuda/mps, so this
+# is silently skipped if the auto-detected device (services/stt/stt.py's
+# _detect_device) isn't cpu.
+quantize: Q
