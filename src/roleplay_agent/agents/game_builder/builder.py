@@ -46,7 +46,7 @@ async def stream_builder_reply(messages: list[BuilderMessage], app_config: AppCo
         app_config.builder_model,
         app_config.default_num_ctx,
         app_config.keep_alive,
-        reasoning=app_config.enable_thinking,
+        reasoning=True,
     )
     async for chunk in llm.astream(_to_lc_messages(messages)):
         if chunk.content:
@@ -59,7 +59,7 @@ def generate_draft(messages: list[BuilderMessage], app_config: AppConfig) -> Gam
         app_config.builder_model,
         app_config.default_num_ctx,
         app_config.keep_alive,
-        reasoning=app_config.enable_thinking,
+        reasoning=True,
     )
     convo = "\n".join(f"{m.role}: {m.content}" for m in messages)
     structured_llm = llm.with_structured_output(GameDraft)
@@ -72,7 +72,7 @@ def generate_draft_from_transcript(transcript: str, app_config: AppConfig) -> Ga
         app_config.builder_model,
         app_config.default_num_ctx,
         app_config.keep_alive,
-        reasoning=app_config.enable_thinking,
+        reasoning=True,
     )
     structured_llm = llm.with_structured_output(GameDraft)
     return structured_llm.invoke(TRANSCRIPT_DRAFT_PROMPT.format(transcript=transcript))
