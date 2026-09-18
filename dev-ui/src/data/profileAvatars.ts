@@ -14,7 +14,6 @@ export const PROFILE_AVATARS: ProfileAvatarOption[] = [
   { id: "ryan", label: "Ryan" },
   { id: "aiden", label: "Aiden" },
   { id: "dylan", label: "Dylan" },
-  { id: "eric", label: "Eric" },
   { id: "serena", label: "Serena" },
   { id: "vivian", label: "Vivian" },
 ];
