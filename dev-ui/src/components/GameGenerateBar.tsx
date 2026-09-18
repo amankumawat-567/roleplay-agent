@@ -66,7 +66,7 @@ export function GameGenerateBar({ onSubmit }: GameGenerateBarProps) {
             onKeyDown={handleKeyDown}
             placeholder={EXAMPLE_PROMPTS[exampleIndex]}
             autoComplete="off"
-            className="w-full bg-transparent text-[15px] outline-none placeholder:text-[var(--color-sub-dim)]"
+            className="w-full bg-transparent text-[15px] outline-none focus-visible:outline-none placeholder:text-[var(--color-sub-dim)]"
           />
         </div>
 

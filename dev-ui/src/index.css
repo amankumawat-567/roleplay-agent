@@ -295,14 +295,20 @@ h6 {
   }
 }
 
-/* Focus visible styles for keyboard accessibility */
-:focus:not(:focus-visible) {
-  outline: none;
-}
+/* Focus visible styles for keyboard accessibility.
+   Wrapped in @layer base so component-level `focus-visible:outline-none`
+   utilities (which live in Tailwind's utilities layer) can still win -
+   unlayered CSS would otherwise beat utility classes regardless of
+   specificity. */
+@layer base {
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
 
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }
 
 /* Skip link styles */
