@@ -5,7 +5,7 @@ title: "" # shown in the picker, e.g. "Stranded on a road trip"
 character_name: "" # optional - who the AI plays, e.g. "Alex" - shown in chat instead of title (a scenario, not a name). Falls back to title when blank.
 tags: [] # short labels for the picker, e.g. [casual, drama, sci-fi]
 provider: ollama # optional - ollama (default) | openai | anthropic, see configs/providers.yaml
-model: YOUR-CHAT-CAPABLE-MODEL # any model from `ollama list` (or the provider's own model name)
+model: default # "default" auto-picks the best currently-available model (see docs/ARCHITECTURE.md's "Dynamic model discovery"); or name one explicitly, e.g. any model from `ollama list`
 starter: user # ai | user - who sends the first line
 num_ctx: 8192 # optional - context window to request from Ollama; omit to use the app default
 
@@ -30,7 +30,7 @@ script: |
 
 research_query: "" # optional: seed search query used by the research step
 
-memory_recall: false # optional - long-term memory across sessions (needs `ollama pull nomic-embed-text`)
+memory_recall: false # optional - long-term memory across sessions (needs configs/models.yaml's embedding_model pulled, e.g. `ollama pull all-minilm:22m`)
 
 skills: [] # optional - in-conversation tools the model can call, e.g. [web_research]
 

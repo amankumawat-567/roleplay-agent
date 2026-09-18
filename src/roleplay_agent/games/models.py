@@ -17,6 +17,12 @@ class Game(BaseModel):
     character_name: str | None = None
     tags: list[str] = Field(default_factory=list)
     provider: str = "ollama"
+    # "default" (services.llm.capabilities.GAME_MODEL_DEFAULT) is a special
+    # sentinel value, resolved at each actual use (see resolve_game_model)
+    # to the same computed "most recently pulled/updated" model a brand-new
+    # persona gets - not a real model name, and not validated against one
+    # here (this field just stores whatever the YAML says, same as
+    # `provider`/`skills`). Any other value is used as-is.
     model: str
     starter: str = "user"
     persona: str

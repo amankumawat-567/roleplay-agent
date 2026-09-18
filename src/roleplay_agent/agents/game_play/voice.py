@@ -10,7 +10,7 @@ audio (`llm/capabilities.py`'s AUDIO_INPUT_CAPABILITY): a capable model
 hears the raw clip directly and produces both `user_said` and `segments`
 from it in one call (F0's original "no separate speech-to-text step").
 Every other model - hosted providers, non-audio Ollama models - gets the
-clip transcribed locally first (`services/stt/whisper.py`), and only the
+clip transcribed locally first (`services/stt/stt.py`), and only the
 resulting text is sent; `user_said` is then just that transcript, not
 something the model has to produce. `api/routes/gameplay/chat.py`'s
 `/voice-turn` decides which path a given turn takes.
@@ -98,6 +98,7 @@ def generate_voice_turn(
     keep_alive: str,
     audio: bytes | None = None,
     transcript: str | None = None,
+    enable_thinking: bool | None = None,
 ) -> VoiceTurn:
     """`system_prompt` is expected to come from
     agent.prompts.build_voice_system_prompt, not build_system_prompt -
@@ -121,7 +122,7 @@ def generate_voice_turn(
     docstring for why F2 already made that call) - `ChatState` itself stays
     text-only; this function is where a turn's audio/transcript actually
     lives."""
-    llm = build_llm(provider, model, num_ctx, keep_alive)
+    llm = build_llm(provider, model, num_ctx, keep_alive, reasoning=enable_thinking)
     messages: list[BaseMessage] = to_lc_messages(system_prompt, recent)
 
     if audio is not None:

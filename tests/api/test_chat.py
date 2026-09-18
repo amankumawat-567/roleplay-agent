@@ -233,7 +233,16 @@ def test_speak_returns_audio_for_a_voiced_persona(client, app_env, monkeypatch):
     captured = {}
 
     async def fake_synthesize(
-        pool, text, voice, model_repo, instruct=None, clone_model_repo=None, voice_samples_dir=None
+        pool,
+        text,
+        voice,
+        backend=None,
+        model_repo=None,
+        instruct=None,
+        clone_model_repo=None,
+        voice_samples_dir=None,
+        device=None,
+        quantize=None,
     ):
         captured["text"] = text
         captured["voice"] = voice
@@ -259,7 +268,16 @@ def test_speak_forwards_instruct_for_voice_mode_delivery(client, app_env, monkey
     captured = {}
 
     async def fake_synthesize(
-        pool, text, voice, model_repo, instruct=None, clone_model_repo=None, voice_samples_dir=None
+        pool,
+        text,
+        voice,
+        backend=None,
+        model_repo=None,
+        instruct=None,
+        clone_model_repo=None,
+        voice_samples_dir=None,
+        device=None,
+        quantize=None,
     ):
         captured["instruct"] = instruct
         return b"wav"
@@ -281,7 +299,16 @@ def test_speak_instruct_defaults_to_none(client, app_env, monkeypatch):
     captured = {}
 
     async def fake_synthesize(
-        pool, text, voice, model_repo, instruct=None, clone_model_repo=None, voice_samples_dir=None
+        pool,
+        text,
+        voice,
+        backend=None,
+        model_repo=None,
+        instruct=None,
+        clone_model_repo=None,
+        voice_samples_dir=None,
+        device=None,
+        quantize=None,
     ):
         captured["instruct"] = instruct
         return b"wav"
@@ -321,7 +348,16 @@ def test_speak_missing_session_returns_404(client, app_env):
 
 def test_speak_503_when_synthesis_fails(client, app_env, monkeypatch):
     async def failing_synthesize(
-        pool, text, voice, model_repo, instruct=None, clone_model_repo=None, voice_samples_dir=None
+        pool,
+        text,
+        voice,
+        backend=None,
+        model_repo=None,
+        instruct=None,
+        clone_model_repo=None,
+        voice_samples_dir=None,
+        device=None,
+        quantize=None,
     ):
         raise TtsError("mlx-audio isn't installed")
 
@@ -342,7 +378,16 @@ def test_speak_truncates_text_to_configured_max_chars(client, app_env, monkeypat
     captured = {}
 
     async def fake_synthesize(
-        pool, text, voice, model_repo, instruct=None, clone_model_repo=None, voice_samples_dir=None
+        pool,
+        text,
+        voice,
+        backend=None,
+        model_repo=None,
+        instruct=None,
+        clone_model_repo=None,
+        voice_samples_dir=None,
+        device=None,
+        quantize=None,
     ):
         captured["text"] = text
         return b"wav"
@@ -355,7 +400,11 @@ def test_speak_truncates_text_to_configured_max_chars(client, app_env, monkeypat
     # app.dependency_overrides is the mechanism FastAPI itself provides for
     # exactly this.
     app.dependency_overrides[get_app_config] = lambda: AppConfig(
-        embedding_model="nomic-embed-text", tts_model_repo="x", tts_max_chars=5
+        embedding_model="nomic-embed-text",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="chatterbox",
+        tts_chatterbox_model_repo="x",
+        tts_max_chars=5,
     )
     try:
         write_game(app_env / "games", "alpha", voice="ryan")
@@ -373,7 +422,16 @@ def test_speak_stream_returns_pcm_chunks_for_a_voiced_persona(client, app_env, m
     captured = {}
 
     async def fake_synthesize_stream(
-        pool, text, voice, model_repo, instruct=None, clone_model_repo=None, voice_samples_dir=None
+        pool,
+        text,
+        voice,
+        backend=None,
+        model_repo=None,
+        instruct=None,
+        clone_model_repo=None,
+        voice_samples_dir=None,
+        device=None,
+        quantize=None,
     ):
         captured.update(text=text, voice=voice)
 
@@ -418,7 +476,16 @@ def test_speak_stream_422_for_blank_text(client, app_env):
 
 def test_speak_stream_503_when_synthesis_fails_before_streaming_starts(client, app_env, monkeypatch):
     async def failing_synthesize_stream(
-        pool, text, voice, model_repo, instruct=None, clone_model_repo=None, voice_samples_dir=None
+        pool,
+        text,
+        voice,
+        backend=None,
+        model_repo=None,
+        instruct=None,
+        clone_model_repo=None,
+        voice_samples_dir=None,
+        device=None,
+        quantize=None,
     ):
         raise TtsError("mlx-audio isn't installed")
 
@@ -461,10 +528,10 @@ def test_voice_turn_422_when_whisper_not_installed(client, app_env, monkeypatch)
 
     _patch_no_audio_ollama(monkeypatch)
 
-    def fake_transcribe(audio, model_size):
-        raise SttUnavailableError("faster-whisper isn't installed - run `pip install '.[transcribe]'`.")
+    def fake_transcribe(audio, model_repo):
+        raise SttUnavailableError("transformers isn't installed - run `pip install '.[transcribe]'`.")
 
-    monkeypatch.setattr(chat_route, "transcribe_wav_bytes", fake_transcribe)
+    monkeypatch.setattr(chat_route.stt_module, "transcribe_wav_bytes", fake_transcribe)
     write_game(app_env / "games", "alpha", model="llama3.1")
     session_id = client.post("/api/sessions", json={"game_id": "alpha"}).json()["session_id"]
 
@@ -481,7 +548,7 @@ def test_voice_turn_422_when_transcript_is_empty(client, app_env, monkeypatch):
     from roleplay_agent.api.routes.gameplay import chat as chat_route
 
     _patch_no_audio_ollama(monkeypatch)
-    monkeypatch.setattr(chat_route, "transcribe_wav_bytes", lambda audio, model_size: "   ")
+    monkeypatch.setattr(chat_route.stt_module, "transcribe_wav_bytes", lambda audio, model_repo: "   ")
     write_game(app_env / "games", "alpha", model="llama3.1")
     session_id = client.post("/api/sessions", json={"game_id": "alpha"}).json()["session_id"]
 
@@ -503,13 +570,13 @@ def test_voice_turn_transcribes_locally_for_a_non_audio_model(client, app_env, m
 
     captured = {}
 
-    def fake_transcribe(audio, model_size):
+    def fake_transcribe(audio, model_repo):
         captured["audio"] = audio
-        captured["model_size"] = model_size
+        captured["model_repo"] = model_repo
         return "what's the plan for tonight"
 
     def fake_generate_voice_turn(
-        system_prompt, recent, provider, model, num_ctx, keep_alive, transcript=None, audio=None
+        system_prompt, recent, provider, model, num_ctx, keep_alive, transcript=None, audio=None, enable_thinking=None
     ):
         captured["transcript"] = transcript
         captured["audio_kwarg"] = audio
@@ -521,7 +588,7 @@ def test_voice_turn_transcribes_locally_for_a_non_audio_model(client, app_env, m
         )
 
     monkeypatch.setattr(voice_module, "build_llm", lambda *a, **k: (_ for _ in ()).throw(AssertionError))
-    monkeypatch.setattr(chat_route, "transcribe_wav_bytes", fake_transcribe)
+    monkeypatch.setattr(chat_route.stt_module, "transcribe_wav_bytes", fake_transcribe)
     monkeypatch.setattr(chat_route, "generate_voice_turn", fake_generate_voice_turn)
     write_game(app_env / "games", "alpha", model="llama3.1")
     session_id = client.post("/api/sessions", json={"game_id": "alpha"}).json()["session_id"]
@@ -577,7 +644,7 @@ def test_voice_turn_generates_reply_and_persists_transcript(client, app_env, mon
     captured = {}
 
     def fake_generate_voice_turn(
-        system_prompt, recent, provider, model, num_ctx, keep_alive, audio=None, transcript=None
+        system_prompt, recent, provider, model, num_ctx, keep_alive, audio=None, transcript=None, enable_thinking=None
     ):
         captured["audio"] = audio
         captured["provider"] = provider

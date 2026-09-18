@@ -17,6 +17,7 @@ data/app.db
 data/app.db-wal
 data/app.db-shm
 data/voice_samples/
+data/games
 
 # design reference screenshots/video, not source
 ref/
@@ -29,3 +30,13 @@ ref/
 
 # runtime log output, not source
 logs/
+
+# Keep only Default games
+!data/games/dragon_knight_quest/game.yaml
+!data/games/friend_discussing_ai/game.yaml
+!data/games/haunted_manor_mystery/game.yaml
+!data/games/rooftop_first_date/game.yaml
+!data/games/space_smuggler_standoff/game.yaml
+
+# Keep game template
+!data/games/template.yaml.example

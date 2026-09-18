@@ -150,11 +150,11 @@ separately-running backend.
   tool-calling field updates (small local models' tool-calling is
   unreliable) - `GameDraft` is a deliberate subset of `Game`'s fields
   (title/tags/persona/user_role/script/research_query), leaving
-  provider/model/starter/etc. to the editor's own defaults. Runs against
-  its own configured `builder_provider`/`builder_model`
-  (`configs/models.yaml`), independent of any persona's own provider, so a
-  stronger hosted model can be dedicated to drafting without moving the
-  roleplay chat itself off Ollama.
+  provider/model/starter/etc. to the editor's own defaults. Always runs
+  against the same computed default model a brand-new persona gets (see
+  `resolve_builder_model()` below), independent of any persona's own
+  provider - no config override, so the builder can't be left pinned to a
+  stale model.
 - **`transcript/`** - `youtube.py` wraps `youtube-transcript-api` to turn a
   pasted video URL into caption text for `game_builder.py`'s
   transcript-draft path (`extract_video_id` handles the common paste forms
@@ -289,8 +289,9 @@ getting its own save flow:
    `transcript/media.py` handles the URL case: yt-dlp resolves virtually
    any URL (YouTube, Vimeo, TikTok, X, SoundCloud, a raw audio/video link,
    ...) and probes for existing captions first; only when none exist does
-   it download the audio and transcribe it locally with faster-whisper (an
-   optional `pip install '.[transcribe]'` dependency). Both paths converge
+   it download the audio and transcribe it locally via Hugging Face
+   `transformers`' ASR pipeline (see "Local speech-to-text" below) - an
+   optional `pip install '.[transcribe]'` dependency. Both paths converge
    on the same `generate_draft_from_transcript` extraction step (2)
    already uses.
 
@@ -468,15 +469,44 @@ up) - not a hardcoded checkbox per skill.
 
 ### Local text-to-speech: a persistent worker process, not a separate service
 
-`llm/tts.py` synthesizes a persona's reply text via
-[`mlx-audio`](https://github.com/Blaizzy/mlx-audio)'s port of
-Qwen3-TTS-12Hz-0.6B-**CustomVoice** (`mlx-community/
-Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit`) - the preset-speaker checkpoint, not
-the voice-cloning **Base** variant (which clones from a ~3s reference clip
-per persona, real asset-management overhead CustomVoice's zero-config
-preset list avoids; per Qwen's own docs a single model instance serves one
-checkpoint type, so mixing both would mean running two model instances,
-not a config flag).
+`services/tts/tts.py` synthesizes a persona's reply text via whichever
+backend `configs/tts.yaml`'s `backend` names - **never a model or backend
+hardcoded in code** (see "Dynamic model discovery" above; TTS gets the same
+treatment). Both backends share the process/streaming plumbing this section
+describes; only model loading and synthesis differ:
+
+- **`chatterbox`** (the current default): [Resemble AI's
+  Chatterbox-Turbo](https://github.com/resemble-ai/chatterbox) via the
+  `chatterbox-tts` pip package (`pip install '.[tts-chatterbox]'`) - plain
+  PyTorch, so it runs on CPU/CUDA/MPS rather than qwen3's Apple-Silicon-only
+  mlx. It has no curated preset speaker list the way qwen3 does below -
+  every `Game.voice` must name a cloned reference clip under
+  `data/voice_samples/`. Device (cpu/cuda/mps) isn't a config knob - a
+  hardware fact `_detect_chatterbox_device()` auto-detects once per worker
+  process (cuda, then mps, then cpu). `configs/tts.yaml`'s
+  `chatterbox.quantize: int8` applies PyTorch dynamic quantization to T3
+  (the GPT2-based text-to-speech-token half of the model)'s `Linear`
+  layers only, CPU-only (dynamic quantization doesn't cover S3Gen's conv
+  layers, and PyTorch's dynamic quantization backend is CPU-only in the
+  first place - `quantize: int8` on a machine that auto-detects to
+  cuda/mps is silently skipped rather than raised, since there's no config
+  knob left for an author to fix it with). It has no native low-level
+  streaming API, so
+  `synthesize_stream()` pseudo-streams one sentence at a time for it
+  instead of qwen3's native sub-second chunking. **Not yet live-verified
+  on real hardware in this repo** (unlike every "verified live" claim
+  elsewhere in this section) - the real-time-factor/memory numbers below
+  are qwen3-only; treat chatterbox's own performance as unmeasured until
+  someone runs it.
+- **`qwen3`**: [`mlx-audio`](https://github.com/Blaizzy/mlx-audio)'s port
+  of Qwen3-TTS-12Hz-0.6B-**CustomVoice** (`mlx-community/
+  Qwen3-TTS-12Hz-0.6B-CustomVoice-8bit`) - the preset-speaker checkpoint,
+  not the voice-cloning **Base** variant (which clones from a ~3s
+  reference clip per persona, real asset-management overhead CustomVoice's
+  zero-config preset list avoids; per Qwen's own docs a single model
+  instance serves one checkpoint type, so mixing both would mean running
+  two model instances, not a config flag). The rest of this section's
+  "verified live" claims are about this backend specifically.
 
 - **Official tooling (`transformers`/`vLLM`) is CUDA-first** - this app
   runs on Apple Silicon via `mlx-audio` instead, a third-party (not
@@ -496,18 +526,21 @@ not a config flag).
   cost: no port to manage, no second process for the user to remember to
   start, no client/server protocol to define. The model loads once in
   that worker on its first call (a module global in the worker's own
-  process, `_synthesize_in_worker`) and is reused for every call after,
+  process, `_synthesize_qwen3_in_worker`/`_get_chatterbox_model`) and is
+  reused for every call after,
   since `ProcessPoolExecutor` doesn't recycle a worker unless told to -
   measured live: a cold first call took ~10.6s, a second call against the
   same warm worker took ~2.4s (~1.2x real-time-factor either way, ~6GB
   peak worker memory - budget for the measured number, not any README's
   marketing figure). `main.py`'s lifespan shuts the pool down on exit.
-- `mlx_audio` is only ever imported *inside* the worker function, never at
-  module import time, and ships as an **optional** dependency
-  (`pip install '.[tts]'`, Apple Silicon only - `mlx` has no non-macOS/arm64
-  wheels) - the main process's dependency footprint stays light, and every
-  `/speak` call just 503s with a clear message if it's missing, never an
-  app-wide requirement.
+- Both backends' real libraries (`mlx_audio`, `chatterbox`/`torch`) are
+  only ever imported *inside* the worker function, never at module import
+  time, and each ships as its own **optional** dependency (`pip install
+  '.[tts]'` for qwen3, Apple Silicon only - `mlx` has no non-macOS/arm64
+  wheels; `pip install '.[tts-chatterbox]'` for chatterbox, cross-platform)
+  - the main process's dependency footprint stays light, and every
+  `/speak` call just 503s with a clear message if the one `backend` needs
+  is missing, never an app-wide requirement.
 - **Synthesized on demand, not eagerly after every reply**:
   `POST /api/sessions/{id}/speak` is called from `ChatBubble.tsx`'s
   read-aloud button, not scheduled automatically once a reply finishes -
@@ -532,6 +565,41 @@ not a config flag).
   erroring, or offline - guarded by an 8s `Promise.race` timeout around
   `audio.play()` so a stuck play promise can never leave the button
   disabled forever.
+
+### Local speech-to-text: generic Hugging Face ASR, not pinned to one model
+
+`services/stt/stt.py` transcribes audio (a downloaded video's no-captions
+fallback via `transcribe_file`, a voice-mode mic capture via
+`transcribe_wav_bytes`) via Hugging Face `transformers`' generic
+`automatic-speech-recognition` pipeline - `configs/transcript.yaml`'s
+`model_repo` can be *any* pipeline-compatible checkpoint on the Hub (a
+Whisper variant, Wav2Vec2, HuBERT, Distil-Whisper, Moonshine, a
+fine-tune, ...), never one particular model/engine hardcoded in code, the
+same "no hardcoded model anywhere" rule "Local text-to-speech" above
+applies to TTS.
+
+- **`transformers` is an optional dependency** (`pip install
+  '.[transcribe]'`, which also pulls in `torch`), imported lazily inside
+  `get_pipeline` only, so the app runs fine (and every other feature
+  works) with it never installed - a caller that needs it just gets
+  `SttUnavailableError` with an install hint until then.
+- **Device is always auto-detected, never a config knob** - `_detect_device`
+  picks cuda > mps > cpu, whichever this machine's torch build actually
+  supports, mirroring `services/tts/tts.py`'s own
+  `_detect_chatterbox_device` (same reasoning: CPU/CUDA/MPS is a hardware
+  fact, not something worth asking an author to guess).
+- **Shared model cache** - `_pipelines` is a process-wide dict keyed on
+  `model_repo`, so both callers above loading the same configured model
+  share one loaded pipeline instead of doubling memory - same reasoning as
+  "Local text-to-speech"'s worker-process model cache, just without a
+  separate process (these calls are already synchronous/blocking, called
+  via `asyncio.to_thread` at the one caller - `/voice-turn` - that can't
+  afford to block the event loop; `media.py`'s own caller already runs
+  outside the event loop entirely).
+- **No Python-level fallback for the model** - `AppConfig.stt_model_repo`
+  has no default (see "Config hygiene" below) - same reasoning as
+  `embedding_model`: a model name belongs in `configs/`, not a string
+  literal in code.
 
 ### Multi-provider model selection
 
@@ -615,20 +683,32 @@ two independent "compute a default" functions:
   draft's provider/model - it never has one - and a Duplicate's carried-
   over provider/model both still take priority; see "Managing a persona"
   above for Duplicate).
-- **`builder_provider`/`builder_model` stay a deliberate, meaningful
-  override** when set in `configs/models.yaml` (see "Config hygiene"
-  below) - `resolve_builder_model()` is the fallback for when they're not:
-  computed the same way as any new persona's default when *neither* is
-  set, or - if only `builder_provider` was chosen deliberately with no
-  model - that specific provider's own best model (never silently
-  switching to a different provider the author didn't ask for; a missing
-  API key still surfaces the same precise `resolve_api_key` error a real
-  chat turn would). `api/routes/game_builder.py`'s `_resolved()` runs this
-  before `game_builder.py`'s functions are called at all (before the
-  user's message is even persisted, so a config error never leaves an
-  orphaned turn nobody gets a reply to) - `game_builder.py` itself doesn't
-  know resolution happened, it just reads `app_config.builder_provider`/
-  `builder_model` directly off whatever `AppConfig` it's handed.
+- **`builder_provider`/`builder_model` are never configured** -
+  `resolve_builder_model()` always computes the same "most recently
+  pulled/updated" pick a brand-new persona gets (`default_chat_model()`),
+  no `configs/models.yaml` override. `api/routes/game_builder.py`'s
+  `_resolved()` runs this before `game_builder.py`'s functions are called
+  at all (before the user's message is even persisted, so a config error
+  never leaves an orphaned turn nobody gets a reply to) - `game_builder.py`
+  itself doesn't know resolution happened, it just reads
+  `app_config.builder_provider`/`builder_model` directly off whatever
+  `AppConfig` it's handed.
+- **A persona's own `model: default`** (`Game.model`, `docs/GAME.md`) is
+  the same idea applied to `game.yaml` itself -
+  `resolve_game_model(provider, model, settings_repo)` returns
+  `(provider, model)` unchanged for any real model name, and only for the
+  literal string `"default"` (`GAME_MODEL_DEFAULT`) calls
+  `default_chat_model()` fresh. `Game.provider` can't distinguish "the
+  author picked ollama" from "the field was never set" (it defaults to
+  `"ollama"`, not `None`), so `model: default` always computes across every
+  reachable provider and ignores this game's own `provider` field entirely
+  rather than trying to stay on it. Resolved fresh on every use
+  (`api/routes/gameplay/chat.py`'s
+  `_resolved_game()` for chat/voice-turn, `Researcher.research()` for the
+  research pipeline - each reloads/receives the game independently, so
+  each resolves independently too) rather than once at `game.yaml` load
+  time, so a session always follows whatever's currently best rather than
+  freezing in whatever was newest the first time this game was loaded.
 - **Not done**: multimodal-capability-aware input (a `vision`/`audio`
   capable model taking image/audio directly) - the cache already carries
   this data (Ollama exposes it for free), but nothing in the app consumes
@@ -643,10 +723,11 @@ two independent "compute a default" functions:
 without exception, was also overridable via a `ROLEPLAY_<NAME>` env var,
 whether or not that was actually appropriate. `keep_alive`,
 `keep_last_messages`, `default_num_ctx`, `embedding_model`,
-`builder_provider`/`builder_model`, `research_max_results`/
-`research_user_agent`, `transcript_max_chars`, `whisper_model_size`,
-`tts_model_repo`/`tts_max_chars` are all *application behavior*, not
-environment secrets - none of them belong in `.env`.
+`enable_thinking`, `research_max_results`/
+`research_user_agent`, `transcript_max_chars`, `stt_model_repo`,
+`tts_backend`/`tts_chatterbox_model_repo`/`tts_qwen3_model_repo`/
+`tts_max_chars` are all *application behavior*, not environment secrets -
+none of them belong in `.env`.
 
 **Split into two objects, not one, so the boundary is structural, not a
 convention to remember:**
@@ -664,23 +745,24 @@ convention to remember:**
   a `BaseSettings` field, so a `ROLEPLAY_KEEP_ALIVE` env var does nothing
   even if someone sets one. Carries everything that used to be on
   `Settings` except the four infra fields above.
-- **No Python-level fallback for a model name** - `embedding_model` and
-  `tts_model_repo` are *required* `AppConfig` fields (no default
-  expression at all). `get_app_config()` checks for both explicitly before
-  constructing it and raises `ConfigError` naming exactly which key is
-  missing and which YAML file it belongs in, rather than either a cryptic
-  pydantic validation error or - the old behavior - a silently-applied
-  hardcoded model string. Called eagerly at import time in `main.py`
+- **No Python-level fallback for a model name** - `embedding_model`,
+  `stt_model_repo`, and `tts_backend` are always *required* `AppConfig`
+  fields (no default expression at all), and whichever of
+  `tts_chatterbox_model_repo`/`tts_qwen3_model_repo` matches `tts_backend`
+  becomes required too (see `_TTS_BACKEND_REQUIRED_KEYS`) - the other TTS
+  backend's model repo field stays optional, since it's simply unused (STT
+  has no such table - it's a single always-on backend, not a choice).
+  `get_app_config()` checks all
+  of this explicitly before constructing it and raises `ConfigError`
+  naming exactly which key is missing and which YAML file it belongs in,
+  rather than either a cryptic pydantic validation error or - the old
+  behavior - a silently-applied hardcoded model string. Called eagerly at import time in `main.py`
   (`app_config = get_app_config()`, right where `get_settings()` already
   was), so a misconfigured deployment fails at process startup, not
   confusingly mid-conversation. Non-model values (`keep_alive`,
   `default_num_ctx`, etc.) keep ordinary Python-level fallback defaults -
   the rule is specifically "no model names in code," not "no defaults in
   code" generally.
-- **`builder_provider`/`builder_model` are the one deliberate exception** -
-  see "Dynamic model discovery" above for why an explicit
-  `configs/models.yaml` override still matters there even though the
-  persona-chat default was removed outright rather than relocated.
 - **Every call site that used to read `settings.X` for a now-moved field
   reads `app_config.X` instead** - a mechanical but real split:
   `api/dependencies.py`'s `get_researcher`/`get_agent`/`get_embeddings`/
@@ -994,15 +1076,17 @@ in-character dialogue with sensible `delivery` notes, and the session's
 messages/title persisted exactly as a real turn should. `npx tsc -b
 --noEmit` and `npm run build` both pass with the new frontend code.
 
-**Shipped - local Whisper fallback for non-audio models**: F0-F4 above
+**Shipped - local STT fallback for non-audio models**: F0-F4 above
 assumed a model that could actually hear the clip. Every other model
 (every hosted provider, every non-audio Ollama model) now gets a second
-path instead of a hard 422: `/voice-turn` transcribes the clip locally with
-`services/stt/whisper.py`'s `transcribe_wav_bytes` (faster-whisper, the
-same optional `transcribe` extra and `whisper_model_size` config
-Section A3's media-transcript fallback already used - one shared model
-cache, so the two features loading the same model_size don't each pay for
-a separate loaded instance) and sends the resulting text instead of the
+path instead of a hard 422: `/voice-turn` transcribes the clip locally via
+`services/stt/stt.py`'s `transcribe_wav_bytes` - Hugging Face
+`transformers`' ASR pipeline against whichever model
+`configs/transcript.yaml`'s `model_repo` names (see "Local
+speech-to-text" below) - the same one Section A3's media-transcript
+fallback already uses, one shared model cache, so the two features
+loading the same model don't each pay for a separate loaded instance -
+and sends the resulting text instead of the
 raw audio. `agent/voice.py`'s `generate_voice_turn` grew a `transcript`
 parameter alongside its original `audio` one: given a transcript, `user_said`
 is just that transcript (no reason to ask the model to re-transcribe what
@@ -1012,7 +1096,7 @@ uniform return type. The frontend's "Voice mode" switch/card
 button/dictation-hiding are consequently no longer gated on
 `AUDIO_INPUT_CAPABILITY` at all (`utils/voiceMode.ts`'s
 `hasAudioInputCapability` is gone) - voice mode is offered for every
-persona, and a missing-`faster-whisper` 422 surfaces through
+persona, and a missing-`transformers` 422 surfaces through
 `VoiceCallPage.tsx`'s existing error banner exactly the way a missing-TTS
 failure already does elsewhere in the app.
 

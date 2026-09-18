@@ -105,6 +105,8 @@ def get_researcher() -> Researcher:
         max_results=app_config.research_max_results,
         keep_alive=app_config.keep_alive,
         default_num_ctx=app_config.default_num_ctx,
+        settings_repo=get_settings_repo(),
+        enable_thinking=app_config.enable_thinking,
     )
 
 
@@ -119,6 +121,7 @@ def get_agent() -> RoleplayAgent:
         embedding_repo=get_embedding_repo(),
         embeddings=get_embeddings(),
         skill_tools=get_skill_tools(),
+        enable_thinking=app_config.enable_thinking,
     )
 
 

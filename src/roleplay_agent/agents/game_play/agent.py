@@ -40,6 +40,7 @@ class RoleplayAgent:
         embedding_repo: EmbeddingRepository | None = None,
         embeddings: Embeddings | None = None,
         skill_tools: dict[str, BaseTool] | None = None,
+        enable_thinking: bool | None = None,
     ):
         self.session_repo = session_repo
         self.message_repo = message_repo
@@ -48,6 +49,7 @@ class RoleplayAgent:
         self.embedding_repo = embedding_repo
         self.embeddings = embeddings
         self.skill_tools = skill_tools or {}
+        self.enable_thinking = enable_thinking
         self.graph = self._build_graph()
 
     async def _recall_memories(self, game, message: str | None) -> list[str]:
@@ -72,7 +74,7 @@ class RoleplayAgent:
 
     async def _generate(self, state: ChatState) -> dict:
         game = state["game"]
-        llm = build_llm(game.provider, game.model, state["num_ctx"], self.keep_alive)
+        llm = build_llm(game.provider, game.model, state["num_ctx"], self.keep_alive, reasoning=self.enable_thinking)
         tools = [self.skill_tools[sid] for sid in game.skills if sid in self.skill_tools]
         if tools:
             llm = llm.bind_tools(tools)

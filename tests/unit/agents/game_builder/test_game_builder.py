@@ -42,7 +42,13 @@ class _FakeLLM:
 
 
 def _app_config(**overrides) -> AppConfig:
-    return AppConfig(embedding_model="nomic-embed-text", tts_model_repo="x", **overrides)
+    return AppConfig(
+        embedding_model="nomic-embed-text",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="chatterbox",
+        tts_chatterbox_model_repo="x",
+        **overrides,
+    )
 
 
 def test_stream_builder_reply_yields_streamed_content(monkeypatch):
@@ -82,11 +88,12 @@ def test_stream_builder_reply_includes_system_prompt_and_history(monkeypatch):
 def test_stream_builder_reply_uses_builder_provider_and_model(monkeypatch):
     calls = []
     fake = _FakeLLM(stream_chunks=[])
-    monkeypatch.setattr(
-        game_builder_module,
-        "build_llm",
-        lambda provider, model, num_ctx, keep_alive: calls.append((provider, model, num_ctx, keep_alive)) or fake,
-    )
+
+    def fake_build_llm(provider, model, num_ctx, keep_alive, reasoning=None):
+        calls.append((provider, model, num_ctx, keep_alive))
+        return fake
+
+    monkeypatch.setattr(game_builder_module, "build_llm", fake_build_llm)
     app_config = _app_config(builder_provider="openai", builder_model="gpt-4o-mini")
 
     async def collect():

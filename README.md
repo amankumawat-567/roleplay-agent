@@ -99,7 +99,8 @@ python3 -m venv venv
 source venv/bin/activate
 
 make install
-ollama pull llama3.1
+ollama pull huihui_ai/qwen3.5-abliterated:4B
+ollama pull all-minilm:22m  # only needed if a persona sets memory_recall: true
 ```
 
 ### Run
@@ -114,15 +115,16 @@ Open **[http://localhost:8000](http://localhost:8000)**.
 
 ### Text-to-Speech (TTS)
 
-For Apple Silicon:
+The backend is set in `configs/tts.yaml`'s `backend` - install the extra matching it:
 
 ```bash
-pip install -e ".[tts]"
+pip install -e ".[tts-chatterbox]"  # backend: chatterbox (default, cross-platform)
+pip install -e ".[tts]"             # backend: qwen3 (Apple Silicon only)
 ```
 
-### Whisper Transcription
+### Speech-to-Text (STT)
 
-For videos without usable captions:
+For videos without usable captions, and voice mode's transcription fallback. Any Hugging Face `transformers` ASR-compatible model - set the repo id in `configs/transcript.yaml`'s `model_repo`:
 
 ```bash
 pip install -e ".[transcribe]"

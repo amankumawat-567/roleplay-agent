@@ -4,16 +4,19 @@ whichever of its ~1800 site extractors matches (YouTube, Vimeo, TikTok,
 X/Twitter, SoundCloud, podcast RSS items, raw audio/video links, ...) and
 probes for existing captions/subtitles first - manual, then
 auto-generated. Only when neither exists does it fall back to downloading
-audio and transcribing it locally with faster-whisper. Captions are near-
-instant and effectively free; the audio+whisper path is the slow,
-CPU/GPU-heavy path, so it's deliberately the fallback, not the default.
+audio and transcribing it locally via services/stt/stt.py's Hugging Face
+`transformers` ASR pipeline (configs/transcript.yaml's `model_repo`).
+Captions are near-instant and effectively free; the audio+STT path is the
+slow, CPU/GPU-heavy path, so it's deliberately the fallback, not the
+default.
 
-faster-whisper is an optional dependency (`pip install '.[transcribe]'`) -
-the actual model loading lives in `services/stt/whisper.py` (shared with
-voice mode's own Whisper fallback, so the two features don't each load a
-separate model instance), imported lazily there so the app runs fine (and
-the caption-first path works) with it never installed. Every request that
-needs it just raises TranscriptFetchError with an install hint until then.
+`transformers` is an optional dependency (`pip install
+'.[transcribe]'`) - the actual model loading lives in services/stt/
+(shared with voice mode's own STT fallback, so the two features don't
+each load a separate model instance), imported lazily there so the app
+runs fine (and the caption-first path works) with it never installed.
+Every request that needs it just raises TranscriptFetchError with an
+install hint until then.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from pathlib import Path
 import httpx
 import yt_dlp
 
-from roleplay_agent.services.stt.whisper import SttUnavailableError, get_whisper_model
+from roleplay_agent.services.stt import SttUnavailableError, transcribe_file
 
 # A bare id someone copy-pasted straight out of a YouTube URL - yt-dlp
 # itself needs a real URL, so this is rewritten to one before dispatch.
@@ -42,11 +45,12 @@ _PARSEABLE_EXTS = ("vtt", "srt", "json3", "ttml", "srv3", "srv1")
 _TIMESTAMP_RE = re.compile(r"\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}")
 _TAG_RE = re.compile(r"<[^>]+>")
 
+
 class TranscriptFetchError(Exception):
     """No usable extractor/captions/audio for the given URL, or a real
-    fetch/transcription failure - yt-dlp and faster-whisper's own
-    exception messages are already human-readable, so this just wraps them
-    under one type the route can catch and turn into a 422."""
+    fetch/transcription failure - yt-dlp and transformers' own exception
+    messages are already human-readable, so this just wraps them under one
+    type the route can catch and turn into a 422."""
 
 
 def normalize_url(url_or_id: str) -> str:
@@ -153,28 +157,26 @@ def _fetch_caption_text(sub_url: str, ext: str) -> str:
     return _parse_json3(raw) if ext == "json3" else _parse_cue_text(raw)
 
 
-def _transcribe_audio(url: str, model_size: str) -> str:
+def _transcribe_audio(url: str, model_repo: str) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         audio_path = download_audio(url, Path(tmp))
         try:
-            model = get_whisper_model(model_size)
+            return transcribe_file(audio_path, model_repo)
         except SttUnavailableError as exc:
-            raise TranscriptFetchError(
-                f"{exc} (needed to transcribe videos that have no captions)."
-            ) from exc
-        segments, _ = model.transcribe(str(audio_path))
-        return " ".join(segment.text.strip() for segment in segments)
+            raise TranscriptFetchError(f"{exc} (needed to transcribe videos that have no captions).") from exc
 
 
-def fetch_transcript(url_or_id: str, max_chars: int, whisper_model_size: str = "base") -> str:
-    """Captions when they exist (near-instant), local Whisper transcription
-    of the downloaded audio when they don't. Truncates to max_chars so a
-    long source can't blow the draft-generation prompt's budget."""
+def fetch_transcript(url_or_id: str, max_chars: int, model_repo: str) -> str:
+    """Captions when they exist (near-instant), local STT transcription of
+    the downloaded audio when they don't - `model_repo` is
+    `app_config.stt_model_repo` (required, no default baked in here - see
+    that field's own docstring). Truncates to max_chars so a long source
+    can't blow the draft-generation prompt's budget."""
     url = normalize_url(url_or_id)
     info = _probe(url)
 
     track = _pick_caption_track(info)
-    text = _fetch_caption_text(*track) if track else _transcribe_audio(url, whisper_model_size)
+    text = _fetch_caption_text(*track) if track else _transcribe_audio(url, model_repo)
 
     text = " ".join(text.split())
     if not text:

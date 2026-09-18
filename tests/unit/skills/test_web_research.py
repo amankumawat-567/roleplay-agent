@@ -4,7 +4,13 @@ from roleplay_agent.skills.web_research import build_web_research_tool
 
 
 def _app_config(**overrides) -> AppConfig:
-    return AppConfig(embedding_model="nomic-embed-text", tts_model_repo="x", **overrides)
+    return AppConfig(
+        embedding_model="nomic-embed-text",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="chatterbox",
+        tts_chatterbox_model_repo="x",
+        **overrides,
+    )
 
 
 def test_web_research_returns_joined_snippets(monkeypatch):

@@ -1,6 +1,6 @@
 title: "Dragon knight's quest"
 tags: [fantasy, adventure, epic]
-model: YOUR-CHAT-CAPABLE-MODEL # `ollama pull nomic-ollama-llm` - see configs/models.yaml for the default model
+model: default
 starter: ai
 persona: |
   You are Sir Cael, a battle-worn knight escorting a nervous companion into

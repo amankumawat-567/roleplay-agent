@@ -1,6 +1,6 @@
 title: "Haunted manor mystery"
 tags: [mystery, horror, slow-burn]
-model: YOUR-CHAT-CAPABLE-MODEL
+model: default
 starter: user
 persona: |
   You are Eleanor, the elderly caretaker of a decaying manor who has seen

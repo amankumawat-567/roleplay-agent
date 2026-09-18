@@ -10,9 +10,10 @@ A "game" is a persona/scenario definition. Three ways to arrive at one:
   turn the conversation into a persona via a structured-output call. The
   draft opens in the same form above for review - nothing saves until you
   do. This is a separate assistant from the roleplay agent itself
-  (`game_builder.py`, `configs/models.yaml`'s `builder_provider`/
-  `builder_model`, independent of any persona's own model) - its only job
-  is proposing a persona, not playing a character.
+  (`game_builder.py`, always on the same computed default model as a
+  brand-new persona - see `llm/capabilities.py`'s `resolve_builder_model`,
+  independent of any persona's own model) - its only job is proposing a
+  persona, not playing a character.
 - **Hand-edit the YAML** directly - create
   `data/games/<your_game_id>/game.yaml` (copy
   `data/games/template.yaml.example` as a starting point):
@@ -22,7 +23,7 @@ title: "My Game"
 character_name: "Alex"  # optional - who the AI plays, shown in chat instead of title. Falls back to title when blank.
 tags: [casual, drama]   # shown as chips in the picker
 provider: ollama         # optional - ollama (default) | openai | anthropic, see configs/providers.yaml
-model: llama3.1
+model: default           # "default" auto-picks the best currently-available model, or name one explicitly (e.g. llama3.1)
 starter: ai              # ai | user
 num_ctx: 8192             # optional - context window to request from Ollama; omit to use the app default
 persona: |
@@ -40,6 +41,24 @@ The directory name (`your_game_id`) becomes the game's id. Do **not** put
 `research_notes` in `game.yaml` - the research step writes those separately
 to the `game_research` sqlite table (`data/app.db`), so authored content and
 generated notes never share a file.
+
+## `model: default`
+
+`model: default` isn't a real model name - it's a sentinel, resolved at
+each turn (chat, voice mode, research) to the same computed "best
+currently-available model" a brand-new persona gets (see
+docs/ARCHITECTURE.md's "Dynamic model discovery": the most recently
+pulled/updated Ollama model, falling back to a configured hosted provider
+only if none qualifies). It's the right choice for a persona you don't
+want to keep manually repointing at whatever you happen to have pulled;
+name an explicit model instead when a persona needs to stay pinned to one
+(e.g. it depends on a specific model's quirks, or you're comparing models
+against each other). `provider` is ignored whenever `model: default`
+resolves - it always picks across every reachable provider, not just
+whatever this game's own `provider` field says (see
+`services.llm.capabilities.resolve_game_model`'s own docstring for why
+that's unavoidable: `provider` defaults to `ollama` whether or not it was
+deliberately set, so there's no way to tell the two apart).
 
 ## Using a hosted model instead of Ollama
 

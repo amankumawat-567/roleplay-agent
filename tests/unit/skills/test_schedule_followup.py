@@ -45,7 +45,12 @@ def _settings(tmp_path) -> Settings:
 
 
 def _app_config() -> AppConfig:
-    return AppConfig(embedding_model="nomic-embed-text", tts_model_repo="x")
+    return AppConfig(
+        embedding_model="nomic-embed-text",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="chatterbox",
+        tts_chatterbox_model_repo="x",
+    )
 
 
 def test_schedule_followup_writes_a_pending_row(tmp_path):

@@ -14,10 +14,8 @@ import time
 import ollama
 from pydantic import BaseModel
 
-from roleplay_agent.config.settings import AppConfig
 from roleplay_agent.services.llm.providers import (
     ProviderConfigError,
-    get_provider,
     get_providers_config,
     resolve_api_key,
 )
@@ -183,44 +181,45 @@ def get_default_provider(settings_repo: SettingsRepository, providers: list[Prov
     return chosen
 
 
-def resolve_builder_model(settings_repo: SettingsRepository, app_config: AppConfig) -> tuple[str, str]:
-    """`configs/models.yaml`'s `builder_provider`/`builder_model`
-    (`app_config`) stay a meaningful, deliberate override when an author
-    actually sets them (see docs/ARCHITECTURE.md's "Config hygiene") -
-    this is only the fallback for when they're unset, and it's the same
-    "computed, not configured" logic as any new persona's default, not the
-    old hardcoded "ollama"/"llama3.1". `settings_repo` is only needed for
-    the capability cache (via get_available_models), not for anything
-    app-behavior-shaped."""
-    if app_config.builder_provider and app_config.builder_model:
-        return app_config.builder_provider, app_config.builder_model
-
-    if app_config.builder_provider:
-        # A provider was deliberately chosen, just not a model - use that
-        # provider's own best available model, or surface exactly *why*
-        # it isn't usable (e.g. a missing API key, via the same
-        # resolve_api_key() a real chat turn would hit) rather than
-        # silently switching to a different provider the author never
-        # asked for. Checked before touching the capability cache at all,
-        # so this never depends on Ollama being reachable.
-        config = get_provider(app_config.builder_provider)
-        if config.kind != "ollama":
-            resolve_api_key(config)
-        match = next(
-            (p for p in get_available_models(settings_repo) if p.provider == app_config.builder_provider), None
+def resolve_builder_model(settings_repo: SettingsRepository) -> tuple[str, str]:
+    """The AI game-builder chat (A2) always runs on the same computed
+    "most recently pulled/updated" default a brand-new persona gets (see
+    default_chat_model) - no config override, so the builder can't be left
+    pinned to a stale model after a fresh Ollama pull."""
+    resolved = default_chat_model(get_available_models(settings_repo))
+    if resolved is None:
+        raise ProviderConfigError(
+            "No usable model found for the AI builder - pull an Ollama model, or configure a "
+            "hosted provider's API key."
         )
-        chat_capable = [m for m in match.models if "completion" in m.capabilities] if match else []
-        if not chat_capable:
-            raise ProviderConfigError(
-                f"No usable chat model found for builder_provider '{app_config.builder_provider}' - "
-                "set builder_model explicitly in configs/models.yaml."
-            )
-        return app_config.builder_provider, chat_capable[0].id
+    return resolved
+
+
+# A game.yaml's `model:` sentinel meaning "compute it" - see resolve_game_model.
+GAME_MODEL_DEFAULT = "default"
+
+
+def resolve_game_model(provider: str, model: str, settings_repo: SettingsRepository) -> tuple[str, str]:
+    """A persona's `game.yaml` can set `model: default` instead of pinning a
+    specific model at authoring time - resolved here to the same computed
+    "most recently pulled/updated" pick a brand-new persona gets (see
+    default_chat_model), every time this is called (so a session keeps
+    following whatever's currently best, not whatever was newest the first
+    time this game was loaded).
+
+    `provider` is ignored whenever this fires - `Game.provider` defaults to
+    `"ollama"` (games/models.py), so there's no way to tell "the author
+    deliberately chose ollama" from "the field was simply never set."
+    `model: default` therefore always means "pick the single best
+    currently-available option across every reachable provider," never
+    "stay on this game's own provider field."."""
+    if model != GAME_MODEL_DEFAULT:
+        return provider, model
 
     resolved = default_chat_model(get_available_models(settings_repo))
     if resolved is None:
         raise ProviderConfigError(
-            "No usable model found for the AI builder - pull an Ollama model, configure a hosted "
-            "provider's API key, or set builder_provider/builder_model in configs/models.yaml."
+            "No usable chat model found for this persona's `model: default` - pull an Ollama model, "
+            "configure a hosted provider's API key, or set an explicit model in its game.yaml."
         )
     return resolved

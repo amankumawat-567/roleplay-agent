@@ -6,7 +6,8 @@ import types
 
 import pytest
 
-from roleplay_agent.services.tts import TtsError, list_cloned_voices, synthesize, synthesize_stream
+from roleplay_agent.config.settings import AppConfig
+from roleplay_agent.services.tts import TtsError, backend_call_kwargs, list_cloned_voices, synthesize, synthesize_stream
 from roleplay_agent.services.tts import tts as tts_module
 
 
@@ -29,10 +30,12 @@ def test_synthesize_uses_preset_repo_for_a_supported_voice(monkeypatch, tmp_path
         captured.update(text=text, model_repo=model_repo, voice=voice, ref_audio=ref_audio, instruct=instruct)
         return b"preset-wav"
 
-    monkeypatch.setattr(tts_module, "_synthesize_in_worker", fake_worker)
+    monkeypatch.setattr(tts_module, "_synthesize_qwen3_in_worker", fake_worker)
 
     result = asyncio.run(
-        synthesize(None, "hi", "ryan", "preset-repo", clone_model_repo="clone-repo", voice_samples_dir=tmp_path)
+        synthesize(
+            None, "hi", "ryan", "qwen3", "preset-repo", clone_model_repo="clone-repo", voice_samples_dir=tmp_path
+        )
     )
 
     assert result == b"preset-wav"
@@ -53,13 +56,14 @@ def test_synthesize_routes_to_clone_repo_for_a_discovered_wav(monkeypatch, tmp_p
         captured.update(model_repo=model_repo, voice=voice, ref_audio=ref_audio, instruct=instruct)
         return b"cloned-wav"
 
-    monkeypatch.setattr(tts_module, "_synthesize_in_worker", fake_worker)
+    monkeypatch.setattr(tts_module, "_synthesize_qwen3_in_worker", fake_worker)
 
     result = asyncio.run(
         synthesize(
             None,
             "hi",
             "rosa",
+            "qwen3",
             "preset-repo",
             "some delivery note",
             clone_model_repo="clone-repo",
@@ -73,8 +77,8 @@ def test_synthesize_routes_to_clone_repo_for_a_discovered_wav(monkeypatch, tmp_p
     assert captured["ref_audio"] == str(tmp_path / "rosa.wav")
     # synthesize() itself forwards instruct unconditionally - dropping it
     # for a cloned voice happens one layer down, inside
-    # _synthesize_in_worker's own call to generate_audio (see the test
-    # below) - not here.
+    # _synthesize_qwen3_in_worker's own call to generate_audio (see the
+    # test below) - not here.
     assert captured["instruct"] == "some delivery note"
 
 
@@ -85,7 +89,7 @@ def test_synthesize_without_clone_params_only_accepts_presets(tmp_path):
 
     async def run():
         with pytest.raises(TtsError, match="Unknown voice"):
-            await synthesize(None, "hi", "rosa", "preset-repo")
+            await synthesize(None, "hi", "rosa", "qwen3", "preset-repo")
 
     asyncio.run(run())
 
@@ -99,6 +103,7 @@ def test_synthesize_unknown_voice_error_lists_cloned_voices_too(tmp_path):
                 None,
                 "hi",
                 "not-a-real-voice",
+                "qwen3",
                 "preset-repo",
                 clone_model_repo="clone-repo",
                 voice_samples_dir=tmp_path,
@@ -107,7 +112,7 @@ def test_synthesize_unknown_voice_error_lists_cloned_voices_too(tmp_path):
     asyncio.run(run())
 
 
-def test_synthesize_in_worker_drops_instruct_for_a_cloned_voice(monkeypatch, tmp_path):
+def test_synthesize_qwen3_in_worker_drops_instruct_for_a_cloned_voice(monkeypatch, tmp_path):
     # instruct is a CustomVoice-only control (mlx_audio.tts.generate's own
     # "instruction for emotion/style") - the cloning checkpoint has no such
     # parameter, so a ref_audio call must never forward it to generate_audio,
@@ -132,12 +137,12 @@ def test_synthesize_in_worker_drops_instruct_for_a_cloned_voice(monkeypatch, tmp
         def __exit__(self, *exc):
             return False
 
-    # _synthesize_in_worker creates its own fresh tempdir for output_path -
-    # redirected to tmp_path so the "reply_000.wav" fake_generate_audio
-    # writes above is what gets read back.
+    # _synthesize_qwen3_in_worker creates its own fresh tempdir for
+    # output_path - redirected to tmp_path so the "reply_000.wav"
+    # fake_generate_audio writes above is what gets read back.
     monkeypatch.setattr(tempfile, "TemporaryDirectory", lambda: _FakeTempDir())
 
-    result = tts_module._synthesize_in_worker(
+    result = tts_module._synthesize_qwen3_in_worker(
         "hi", "clone-repo", None, str(tmp_path / "rosa.wav"), "some delivery note"
     )
 
@@ -163,11 +168,11 @@ def test_synthesize_stream_yields_rate_then_chunks_then_stops(monkeypatch):
         chunk_queue.put(("chunk", b"bb"))
         chunk_queue.put(("done", None))
 
-    monkeypatch.setattr(tts_module, "_synthesize_stream_in_worker", fake_worker)
+    monkeypatch.setattr(tts_module, "_synthesize_qwen3_stream_in_worker", fake_worker)
     monkeypatch.setattr(tts_module, "_get_manager", lambda: _fake_manager(queue.Queue()))
 
     async def run():
-        sample_rate, chunks = await synthesize_stream(None, "hi", "ryan", "preset-repo")
+        sample_rate, chunks = await synthesize_stream(None, "hi", "ryan", "qwen3", "preset-repo")
         assert sample_rate == 24000
         collected = [chunk async for chunk in chunks]
         assert collected == [b"aa", b"bb"]
@@ -179,12 +184,12 @@ def test_synthesize_stream_raises_on_worker_error_before_any_chunk(monkeypatch):
     def fake_worker(text, model_repo, voice, ref_audio, instruct, chunk_queue):
         chunk_queue.put(("error", "boom"))
 
-    monkeypatch.setattr(tts_module, "_synthesize_stream_in_worker", fake_worker)
+    monkeypatch.setattr(tts_module, "_synthesize_qwen3_stream_in_worker", fake_worker)
     monkeypatch.setattr(tts_module, "_get_manager", lambda: _fake_manager(queue.Queue()))
 
     async def run():
         with pytest.raises(TtsError, match="boom"):
-            await synthesize_stream(None, "hi", "ryan", "preset-repo")
+            await synthesize_stream(None, "hi", "ryan", "qwen3", "preset-repo")
 
     asyncio.run(run())
 
@@ -200,11 +205,11 @@ def test_synthesize_stream_raises_if_error_arrives_mid_stream(monkeypatch):
         chunk_queue.put(("chunk", b"aa"))
         chunk_queue.put(("error", "boom"))
 
-    monkeypatch.setattr(tts_module, "_synthesize_stream_in_worker", fake_worker)
+    monkeypatch.setattr(tts_module, "_synthesize_qwen3_stream_in_worker", fake_worker)
     monkeypatch.setattr(tts_module, "_get_manager", lambda: _fake_manager(queue.Queue()))
 
     async def run():
-        sample_rate, chunks = await synthesize_stream(None, "hi", "ryan", "preset-repo")
+        sample_rate, chunks = await synthesize_stream(None, "hi", "ryan", "qwen3", "preset-repo")
         assert sample_rate == 24000
         collected = []
         with pytest.raises(TtsError, match="boom"):
@@ -222,11 +227,11 @@ def test_synthesize_stream_unknown_voice_raises_before_touching_worker(monkeypat
         nonlocal called
         called = True
 
-    monkeypatch.setattr(tts_module, "_synthesize_stream_in_worker", fake_worker)
+    monkeypatch.setattr(tts_module, "_synthesize_qwen3_stream_in_worker", fake_worker)
 
     async def run():
         with pytest.raises(TtsError, match="Unknown voice"):
-            await synthesize_stream(None, "hi", "not-a-real-voice", "preset-repo")
+            await synthesize_stream(None, "hi", "not-a-real-voice", "qwen3", "preset-repo")
 
     asyncio.run(run())
     assert called is False
@@ -256,7 +261,7 @@ def test_synthesize_stream_in_worker_puts_rate_then_pcm_chunks_then_done(monkeyp
     monkeypatch.setattr(tts_module, "_model_repo", "preset-repo", raising=False)
 
     fake_queue: queue.Queue = queue.Queue()
-    tts_module._synthesize_stream_in_worker("hi", "preset-repo", "ryan", None, "cheerful", fake_queue)
+    tts_module._synthesize_qwen3_stream_in_worker("hi", "preset-repo", "ryan", None, "cheerful", fake_queue)
 
     messages = []
     while not fake_queue.empty():
@@ -267,3 +272,114 @@ def test_synthesize_stream_in_worker_puts_rate_then_pcm_chunks_then_done(monkeyp
     assert [kind for kind, _ in messages[1:-1]] == ["chunk", "chunk"]
     assert captured_kwargs["stream"] is True
     assert captured_kwargs["instruct"] == "cheerful"
+
+
+def test_split_sentences_keeps_punctuation_and_strips_whitespace():
+    assert tts_module._split_sentences("Hi there!  How are you? Fine.") == ["Hi there!", "How are you?", "Fine."]
+
+
+def test_split_sentences_falls_back_to_whole_text_with_no_sentence_end():
+    assert tts_module._split_sentences("no terminal punctuation") == ["no terminal punctuation"]
+
+
+def test_synthesize_chatterbox_requires_a_cloned_voice_no_presets(tmp_path):
+    # chatterbox has no SUPPORTED_VOICES-style preset list - "ryan" is a
+    # qwen3-only preset name, so it must fail here even though it's valid
+    # for the qwen3 backend.
+    async def run():
+        with pytest.raises(TtsError, match="no preset speakers"):
+            await synthesize(
+                None, "hi", "ryan", "chatterbox", "ResembleAI/chatterbox-turbo", voice_samples_dir=tmp_path
+            )
+
+    asyncio.run(run())
+
+
+def test_synthesize_chatterbox_routes_to_its_own_worker_with_cloned_voice(monkeypatch, tmp_path):
+    (tmp_path / "rosa.wav").write_bytes(b"x")
+    captured = {}
+
+    def fake_worker(text, model_repo, quantize, ref_audio):
+        captured.update(text=text, model_repo=model_repo, quantize=quantize, ref_audio=ref_audio)
+        return b"chatterbox-wav"
+
+    monkeypatch.setattr(tts_module, "_synthesize_chatterbox_in_worker", fake_worker)
+
+    result = asyncio.run(
+        synthesize(
+            None,
+            "hi",
+            "rosa",
+            "chatterbox",
+            "ResembleAI/chatterbox-turbo",
+            voice_samples_dir=tmp_path,
+            quantize="int8",
+        )
+    )
+
+    assert result == b"chatterbox-wav"
+    assert captured == {
+        "text": "hi",
+        "model_repo": "ResembleAI/chatterbox-turbo",
+        "quantize": "int8",
+        "ref_audio": str(tmp_path / "rosa.wav"),
+    }
+
+
+def test_synthesize_chatterbox_stream_pseudo_streams_per_sentence(monkeypatch, tmp_path):
+    (tmp_path / "rosa.wav").write_bytes(b"x")
+
+    def fake_worker(text, model_repo, quantize, ref_audio, chunk_queue):
+        for i, _sentence in enumerate(tts_module._split_sentences(text)):
+            if i == 0:
+                chunk_queue.put(("rate", 24000))
+            chunk_queue.put(("chunk", f"chunk-{i}".encode()))
+        chunk_queue.put(("done", None))
+
+    monkeypatch.setattr(tts_module, "_synthesize_chatterbox_stream_in_worker", fake_worker)
+    monkeypatch.setattr(tts_module, "_get_manager", lambda: _fake_manager(queue.Queue()))
+
+    async def run():
+        sample_rate, chunks = await synthesize_stream(
+            None,
+            "First sentence. Second sentence.",
+            "rosa",
+            "chatterbox",
+            "ResembleAI/chatterbox-turbo",
+            voice_samples_dir=tmp_path,
+        )
+        assert sample_rate == 24000
+        collected = [chunk async for chunk in chunks]
+        assert collected == [b"chunk-0", b"chunk-1"]
+
+    asyncio.run(run())
+
+
+def test_backend_call_kwargs_chatterbox():
+    app_config = AppConfig(
+        embedding_model="all-minilm:22m",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="chatterbox",
+        tts_chatterbox_model_repo="ResembleAI/chatterbox-turbo",
+        tts_chatterbox_quantize="int8",
+    )
+    assert backend_call_kwargs(app_config) == {
+        "backend": "chatterbox",
+        "model_repo": "ResembleAI/chatterbox-turbo",
+        "quantize": "int8",
+    }
+
+
+def test_backend_call_kwargs_qwen3():
+    app_config = AppConfig(
+        embedding_model="all-minilm:22m",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="qwen3",
+        tts_qwen3_model_repo="mlx-community/some-model",
+        tts_qwen3_clone_model_repo="mlx-community/some-clone-model",
+    )
+    assert backend_call_kwargs(app_config) == {
+        "backend": "qwen3",
+        "model_repo": "mlx-community/some-model",
+        "clone_model_repo": "mlx-community/some-clone-model",
+    }

@@ -1,3 +1,3 @@
-from roleplay_agent.services.stt.whisper import SttUnavailableError, get_whisper_model, transcribe_wav_bytes
+from roleplay_agent.services.stt.stt import SttUnavailableError, transcribe_file, transcribe_wav_bytes
 
-__all__ = ["SttUnavailableError", "get_whisper_model", "transcribe_wav_bytes"]
+__all__ = ["SttUnavailableError", "transcribe_file", "transcribe_wav_bytes"]

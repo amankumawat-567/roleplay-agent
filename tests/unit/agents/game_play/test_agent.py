@@ -98,12 +98,12 @@ def test_generate_returns_llm_reply(repos, monkeypatch):
     session_repo, message_repo = repos
     agent = RoleplayAgent(session_repo, message_repo, keep_last=20, keep_alive="30m")
     calls = []
-    monkeypatch.setattr(
-        agent_module,
-        "build_llm",
-        lambda provider, model, num_ctx, keep_alive: calls.append((provider, model, num_ctx, keep_alive))
-        or _FakeLLM(async_reply="a reply"),
-    )
+
+    def fake_build_llm(provider, model, num_ctx, keep_alive, reasoning=None):
+        calls.append((provider, model, num_ctx, keep_alive))
+        return _FakeLLM(async_reply="a reply")
+
+    monkeypatch.setattr(agent_module, "build_llm", fake_build_llm)
 
     state = {
         "session_id": "s1",

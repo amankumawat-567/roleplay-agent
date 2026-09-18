@@ -8,15 +8,27 @@ from roleplay_agent.services.llm import capabilities as capabilities_module
 
 
 def _app_config(**overrides) -> AppConfig:
-    return AppConfig(embedding_model="nomic-embed-text", tts_model_repo="x", **overrides)
+    return AppConfig(
+        embedding_model="nomic-embed-text",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="chatterbox",
+        tts_chatterbox_model_repo="x",
+        **overrides,
+    )
 
 
-def _use_builder_provider(monkeypatch, provider: str) -> None:
-    # builder_provider lives on AppConfig now (docs/ARCHITECTURE.md's
-    # "Config hygiene") - not env-overridable by design, so a test that
-    # wants a specific one monkeypatches the route's own get_app_config
-    # instead of setting a ROLEPLAY_ env var.
-    monkeypatch.setattr(game_builder_route, "get_app_config", lambda: _app_config(builder_provider=provider))
+def _make_nothing_usable(monkeypatch) -> None:
+    # resolve_builder_model() always computes the default (no
+    # builder_provider/builder_model override exists anymore) - to force
+    # its "nothing anywhere is usable" error path, make Ollama unreachable
+    # and ensure no hosted provider's API key is set either.
+    class _UnreachableOllamaClient:
+        def list(self):
+            raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(capabilities_module.ollama, "Client", lambda: _UnreachableOllamaClient())
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
 
 class _FakeOllamaModel:
@@ -124,20 +136,18 @@ def test_builder_chat_prepends_context_without_persisting_it(client, app_env, mo
     assert [m["content"] for m in messages] == ["make them grumpier", "ok"]
 
 
-def test_builder_chat_reports_clear_error_for_unconfigured_provider(client, app_env, monkeypatch):
-    # Resolving builder_provider/builder_model now happens before the
-    # response starts streaming, so an
-    # unconfigured provider is a real 422 - not a 200 with the error
-    # buried in the streamed text the way a mid-stream provider failure
-    # still has to be (the HTTP status is already committed by then).
-    _use_builder_provider(monkeypatch, "openai")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+def test_builder_chat_reports_clear_error_when_nothing_usable(client, app_env, monkeypatch):
+    # Resolving the builder's model now happens before the response starts
+    # streaming, so nothing being usable is a real 422 - not a 200 with the
+    # error buried in the streamed text the way a mid-stream provider
+    # failure still has to be (the HTTP status is already committed by then).
+    _make_nothing_usable(monkeypatch)
     session_id = _create_session(client)
 
     response = client.post(f"/api/games/builder/sessions/{session_id}/chat", json={"message": "hi"})
 
     assert response.status_code == 422
-    assert "OPENAI_API_KEY" in response.json()["detail"]
+    assert "No usable model" in response.json()["detail"]
     # Resolved (and failed) before the user's message was ever persisted -
     # no orphaned turn nobody will get a reply to.
     assert client.get(f"/api/games/builder/sessions/{session_id}/messages").json()["messages"] == []
@@ -166,18 +176,17 @@ def test_builder_draft_returns_structured_draft(client, app_env, monkeypatch):
     assert response.json() == draft.model_dump()
 
 
-def test_builder_draft_missing_api_key_returns_422(client, app_env, monkeypatch):
+def test_builder_draft_nothing_usable_returns_422(client, app_env, monkeypatch):
     # Real registry wiring here (no generate_draft monkeypatch) - the
     # global ProviderConfigError exception handler applies since /draft
     # isn't a streaming route.
-    _use_builder_provider(monkeypatch, "openai")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    _make_nothing_usable(monkeypatch)
     session_id = _create_session(client)
 
     response = client.post(f"/api/games/builder/sessions/{session_id}/draft", json={})
 
     assert response.status_code == 422
-    assert "OPENAI_API_KEY" in response.json()["detail"]
+    assert "No usable model" in response.json()["detail"]
 
 
 def _draft() -> GameDraft:
@@ -233,7 +242,7 @@ def test_builder_draft_from_video_fetches_transcript_then_drafts(client, app_env
     monkeypatch.setattr(
         game_builder_route,
         "fetch_transcript",
-        lambda url, max_chars, whisper_model_size: calls.append((url, max_chars)) or "a fetched transcript",
+        lambda url, max_chars, model_repo: calls.append((url, max_chars)) or "a fetched transcript",
     )
     monkeypatch.setattr(
         game_builder_route,
@@ -252,7 +261,7 @@ def test_builder_draft_from_video_fetches_transcript_then_drafts(client, app_env
 
 
 def test_builder_draft_from_video_returns_422_on_fetch_failure(client, app_env, monkeypatch):
-    def raise_error(url, max_chars, whisper_model_size):
+    def raise_error(url, max_chars, model_repo):
         raise TranscriptFetchError("No transcript found for this video")
 
     monkeypatch.setattr(game_builder_route, "fetch_transcript", raise_error)

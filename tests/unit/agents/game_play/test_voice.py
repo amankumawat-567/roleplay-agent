@@ -58,11 +58,12 @@ def test_generate_voice_turn_uses_provider_and_model(monkeypatch):
     calls = []
     turn = VoiceTurn(user_said="ok", segments=[SpeechSegment(text="ok")])
     fake = _FakeLLM(turn, VoiceTurn)
-    monkeypatch.setattr(
-        voice_module,
-        "build_llm",
-        lambda provider, model, num_ctx, keep_alive: calls.append((provider, model, num_ctx, keep_alive)) or fake,
-    )
+
+    def fake_build_llm(provider, model, num_ctx, keep_alive, reasoning=None):
+        calls.append((provider, model, num_ctx, keep_alive))
+        return fake
+
+    monkeypatch.setattr(voice_module, "build_llm", fake_build_llm)
 
     generate_voice_turn("sys", [], "openai", "gpt-4o-mini", 4096, "5m", audio=b"wav-bytes")
 

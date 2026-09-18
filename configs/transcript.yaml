@@ -3,7 +3,14 @@
 # prompt size regardless of how long the source video actually is.
 max_chars: 20000
 
-# faster-whisper model size used only when a URL has no captions to fall
-# back on (tiny/base/small/medium/large-v3, or a distil-* variant) - bigger
-# is more accurate and much slower on CPU.
-whisper_model_size: base
+# Local speech-to-text via Hugging Face `transformers`' generic
+# automatic-speech-recognition pipeline (see services/stt/stt.py) - any
+# pipeline-compatible repo id works, not just Whisper (Wav2Vec2, HuBERT,
+# Distil-Whisper, Moonshine, a Whisper variant, a fine-tune, ...), never
+# one particular model baked into code. Used both when a URL has no
+# captions to fall back on (transcript/media.py) and for voice mode's own
+# transcription fallback (dispatched from api/routes/gameplay/chat.py's
+# /voice-turn). Device (cuda/mps/cpu) is always auto-detected from what
+# this machine's torch build actually supports - not a config knob, no
+# reason to make anyone guess their own hardware.
+model_repo: YOUR-SPEECH-TO-TEXT-MODEL

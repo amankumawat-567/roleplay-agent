@@ -20,8 +20,8 @@ class _FakeLLM:
 def test_summarize_style_threads_provider_and_model_through(monkeypatch):
     calls = []
 
-    def fake_build_llm(provider, model, num_ctx, keep_alive):
-        calls.append((provider, model, num_ctx, keep_alive))
+    def fake_build_llm(provider, model, num_ctx, keep_alive, reasoning=None):
+        calls.append((provider, model, num_ctx, keep_alive, reasoning))
         return _FakeLLM("  style notes  ")
 
     monkeypatch.setattr(summarizer_module, "build_llm", fake_build_llm)
@@ -31,7 +31,7 @@ def test_summarize_style_threads_provider_and_model_through(monkeypatch):
     )
 
     assert result == "style notes"
-    assert calls == [("anthropic", "claude-3-5", 8192, "30m")]
+    assert calls == [("anthropic", "claude-3-5", 8192, "30m", None)]
 
 
 def test_summarize_style_empty_snippets_skips_the_llm_call(monkeypatch):

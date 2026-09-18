@@ -12,14 +12,28 @@ def test_build_llm_dispatches_to_ollama_with_configured_base_url(monkeypatch):
     monkeypatch.setattr(
         ollama_module,
         "build_llm",
-        lambda model, num_ctx, keep_alive, base_url=None: calls.append((model, num_ctx, keep_alive, base_url))
-        or "ollama-llm",
+        lambda model, num_ctx, keep_alive, base_url=None, reasoning=None: (
+            calls.append((model, num_ctx, keep_alive, base_url, reasoning)) or "ollama-llm"
+        ),
     )
 
     result = build_llm("ollama", "llama3.1", 8192, "30m")
 
     assert result == "ollama-llm"
-    assert calls == [("llama3.1", 8192, "30m", "http://127.0.0.1:11434")]
+    assert calls == [("llama3.1", 8192, "30m", "http://127.0.0.1:11434", None)]
+
+
+def test_build_llm_forwards_reasoning_to_ollama(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        ollama_module,
+        "build_llm",
+        lambda model, num_ctx, keep_alive, base_url=None, reasoning=None: calls.append(reasoning) or "ollama-llm",
+    )
+
+    build_llm("ollama", "llama3.1", 8192, "30m", reasoning=False)
+
+    assert calls == [False]
 
 
 def test_build_llm_dispatches_to_openai(monkeypatch):

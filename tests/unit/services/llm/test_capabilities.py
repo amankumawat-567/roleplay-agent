@@ -1,6 +1,5 @@
 import pytest
 
-from roleplay_agent.config.settings import AppConfig
 from roleplay_agent.services.llm import capabilities as capabilities_module
 from roleplay_agent.services.llm.capabilities import (
     ModelInfo,
@@ -10,6 +9,7 @@ from roleplay_agent.services.llm.capabilities import (
     get_default_provider,
     has_capability,
     resolve_builder_model,
+    resolve_game_model,
 )
 from roleplay_agent.services.llm.providers import ProviderConfigError
 from roleplay_agent.services.storage.database import Database
@@ -51,10 +51,6 @@ def _settings_repo(tmp_path) -> SettingsRepository:
     db = Database(tmp_path / "test.db")
     db.init_db()
     return SettingsRepository(db)
-
-
-def _app_config(**overrides) -> AppConfig:
-    return AppConfig(embedding_model="nomic-embed-text", tts_model_repo="x", **overrides)
 
 
 def _mock_ollama(monkeypatch, client: _FakeOllamaClient) -> None:
@@ -181,22 +177,12 @@ def test_get_default_provider_none_when_nothing_reachable(tmp_path):
     assert get_default_provider(_settings_repo(tmp_path), []) is None
 
 
-def test_resolve_builder_model_uses_explicit_override_with_no_lookup(tmp_path, monkeypatch):
-    def _boom():
-        raise AssertionError("should not touch the capability cache at all")
-
-    monkeypatch.setattr(capabilities_module, "get_available_models", lambda *a, **k: _boom())
-    app_config = _app_config(builder_provider="openai", builder_model="gpt-4o-mini")
-
-    assert resolve_builder_model(_settings_repo(tmp_path), app_config) == ("openai", "gpt-4o-mini")
-
-
-def test_resolve_builder_model_computes_default_when_unset(tmp_path, monkeypatch):
+def test_resolve_builder_model_computes_default(tmp_path, monkeypatch):
     _mock_ollama(monkeypatch, _FakeOllamaClient(models=[_FakeModel("m1")], capabilities={"m1": ["completion"]}))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    assert resolve_builder_model(_settings_repo(tmp_path), _app_config()) == ("ollama", "m1")
+    assert resolve_builder_model(_settings_repo(tmp_path)) == ("ollama", "m1")
 
 
 def test_resolve_builder_model_raises_when_nothing_usable(tmp_path, monkeypatch):
@@ -205,24 +191,45 @@ def test_resolve_builder_model_raises_when_nothing_usable(tmp_path, monkeypatch)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     with pytest.raises(ProviderConfigError):
-        resolve_builder_model(_settings_repo(tmp_path), _app_config())
+        resolve_builder_model(_settings_repo(tmp_path))
 
 
-def test_resolve_builder_model_explicit_provider_no_model_uses_its_own_best_model(tmp_path, monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+def test_resolve_game_model_passes_through_a_real_model_name_unchanged(tmp_path, monkeypatch):
+    def _boom(*a, **k):
+        raise AssertionError("should not touch the capability cache for a real model name")
+
+    monkeypatch.setattr(capabilities_module, "get_available_models", _boom)
+
+    assert resolve_game_model("ollama", "llama3.1", _settings_repo(tmp_path)) == ("ollama", "llama3.1")
+
+
+def test_resolve_game_model_computes_default_for_the_sentinel(tmp_path, monkeypatch):
     _mock_ollama(monkeypatch, _FakeOllamaClient(models=[_FakeModel("m1")], capabilities={"m1": ["completion"]}))
-
-    provider, model = resolve_builder_model(_settings_repo(tmp_path), _app_config(builder_provider="openai"))
-
-    assert provider == "openai"
-    assert model  # the table's first openai model, not Ollama's
-
-
-def test_resolve_builder_model_explicit_provider_missing_key_raises_precise_error(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    with pytest.raises(ProviderConfigError, match="OPENAI_API_KEY"):
-        resolve_builder_model(_settings_repo(tmp_path), _app_config(builder_provider="openai"))
+    assert resolve_game_model("ollama", "default", _settings_repo(tmp_path)) == ("ollama", "m1")
+
+
+def test_resolve_game_model_ignores_the_games_own_provider_for_the_sentinel(tmp_path, monkeypatch):
+    # provider: openai on the game.yaml is ignored - "default" always
+    # computes across every reachable provider (see the function's own
+    # docstring for why Game.provider can't be trusted to mean "deliberately
+    # chosen" vs. simply never set).
+    _mock_ollama(monkeypatch, _FakeOllamaClient(models=[_FakeModel("m1")], capabilities={"m1": ["completion"]}))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    assert resolve_game_model("openai", "default", _settings_repo(tmp_path)) == ("ollama", "m1")
+
+
+def test_resolve_game_model_raises_when_nothing_usable(tmp_path, monkeypatch):
+    _mock_ollama(monkeypatch, _FakeOllamaClient(unreachable=True))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    with pytest.raises(ProviderConfigError):
+        resolve_game_model("ollama", "default", _settings_repo(tmp_path))
 
 
 def test_has_capability_true_when_model_reports_it():

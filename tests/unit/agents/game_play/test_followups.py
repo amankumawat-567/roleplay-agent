@@ -159,7 +159,12 @@ def test_scheduling_via_the_real_graph_then_delivering_it_end_to_end(env, tmp_pa
 
     settings = Settings(data_dir=tmp_path / "settings-data")
     Database(settings.db_path).init_db()
-    app_config = AppConfig(embedding_model="nomic-embed-text", tts_model_repo="x")
+    app_config = AppConfig(
+        embedding_model="nomic-embed-text",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="chatterbox",
+        tts_chatterbox_model_repo="x",
+    )
     tool = build_schedule_followup_tool(settings, app_config)
     followup_repo = FollowupRepository(Database(settings.db_path))
 
@@ -247,7 +252,12 @@ def test_a_delivered_followup_can_schedule_another_one(env, tmp_path, monkeypatc
 
     settings = Settings(data_dir=tmp_path / "settings-data")
     Database(settings.db_path).init_db()
-    app_config = AppConfig(embedding_model="nomic-embed-text", tts_model_repo="x")
+    app_config = AppConfig(
+        embedding_model="nomic-embed-text",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="chatterbox",
+        tts_chatterbox_model_repo="x",
+    )
     tool = build_schedule_followup_tool(settings, app_config)
     # Same db the tool itself writes to (see build_schedule_followup_tool) -
     # not env["followup_repo"], which points at a different sqlite file.

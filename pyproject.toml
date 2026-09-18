@@ -26,20 +26,30 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.6"]
-# Section C - local TTS (see llm/tts.py). Apple Silicon only (mlx-audio
-# depends on mlx, which only ships macOS/arm64 wheels) - kept out of the
-# base dependency set so installing/running the app elsewhere is unaffected;
-# every voice request just 503s with a clear message until this is installed.
+# Section C - local TTS, "qwen3" backend (see services/tts/tts.py).
+# Apple Silicon only (mlx-audio depends on mlx, which only ships
+# macOS/arm64 wheels) - kept out of the base dependency set so installing/
+# running the app elsewhere is unaffected; every voice request just 503s
+# with a clear message until the backend configured in configs/tts.yaml
+# has its extra installed.
 tts = ["mlx-audio>=0.5"]
-# Section A3 - local Whisper transcription, shared by two fallbacks:
-# transcript/media.py's no-captions-found path for a persona-source URL,
-# and voice mode's non-audio-model path (services/stt/whisper.py, used by
-# agent/voice.py when a persona's model can't take audio directly). Kept
-# optional since it pulls in ctranslate2/torch-sized weights and downloads
-# model checkpoints at runtime; both caller's primary paths (captions when
-# they exist; a real audio-capable model) work without it, and every
-# fallback request just 422s with a clear message until this is installed.
-transcribe = ["faster-whisper>=1.0"]
+# Section C - local TTS, "chatterbox" backend (see services/tts/tts.py).
+# Cross-platform (plain PyTorch, CPU/CUDA/MPS) unlike the mlx-audio-based
+# "qwen3" backend above - pulls in torch/transformers-sized weights, so
+# kept as its own optional extra rather than a base dependency.
+tts-chatterbox = ["chatterbox-tts>=0.1.4", "huggingface-hub>=0.24"]
+# Section A3 - local STT (see services/stt/stt.py), shared by two
+# fallbacks: transcript/media.py's no-captions-found path for a
+# persona-source URL, and voice mode's non-audio-model path (used by
+# agent/voice.py when a persona's model can't take audio directly). Any
+# Hugging Face `transformers` automatic-speech-recognition-pipeline-
+# compatible model, not pinned to one engine - configs/transcript.yaml's
+# `model_repo` picks which. Kept optional since it pulls in torch-sized
+# weights and downloads model checkpoints at runtime; both caller's
+# primary paths (captions when they exist; a real audio-capable model)
+# work without it, and every fallback request just 422s with a clear
+# message until this is installed.
+transcribe = ["transformers>=4.40", "torch>=2.2"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/roleplay_agent"]

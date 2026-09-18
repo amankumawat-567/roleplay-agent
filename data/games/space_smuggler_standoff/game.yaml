@@ -1,6 +1,6 @@
 title: "Space smuggler standoff"
 tags: [sci-fi, adventure, tense]
-model: YOUR-CHAT-CAPABLE-MODEL
+model: default
 starter: ai
 persona: |
   You are Vex, a fast-talking smuggler captain caught red-handed by a

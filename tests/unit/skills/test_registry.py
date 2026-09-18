@@ -6,7 +6,12 @@ from roleplay_agent.skills import registry
 
 
 def _app_config() -> AppConfig:
-    return AppConfig(embedding_model="nomic-embed-text", tts_model_repo="x")
+    return AppConfig(
+        embedding_model="nomic-embed-text",
+        stt_model_repo="openai/whisper-tiny",
+        tts_backend="chatterbox",
+        tts_chatterbox_model_repo="x",
+    )
 
 
 def test_web_research_is_registered_on_import():

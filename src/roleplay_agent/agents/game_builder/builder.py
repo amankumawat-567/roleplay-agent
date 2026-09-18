@@ -42,7 +42,11 @@ def _to_lc_messages(messages: list[BuilderMessage]) -> list[BaseMessage]:
 
 async def stream_builder_reply(messages: list[BuilderMessage], app_config: AppConfig) -> AsyncGenerator[str, None]:
     llm = build_llm(
-        app_config.builder_provider, app_config.builder_model, app_config.default_num_ctx, app_config.keep_alive
+        app_config.builder_provider,
+        app_config.builder_model,
+        app_config.default_num_ctx,
+        app_config.keep_alive,
+        reasoning=app_config.enable_thinking,
     )
     async for chunk in llm.astream(_to_lc_messages(messages)):
         if chunk.content:
@@ -51,7 +55,11 @@ async def stream_builder_reply(messages: list[BuilderMessage], app_config: AppCo
 
 def generate_draft(messages: list[BuilderMessage], app_config: AppConfig) -> GameDraft:
     llm = build_llm(
-        app_config.builder_provider, app_config.builder_model, app_config.default_num_ctx, app_config.keep_alive
+        app_config.builder_provider,
+        app_config.builder_model,
+        app_config.default_num_ctx,
+        app_config.keep_alive,
+        reasoning=app_config.enable_thinking,
     )
     convo = "\n".join(f"{m.role}: {m.content}" for m in messages)
     structured_llm = llm.with_structured_output(GameDraft)
@@ -60,7 +68,11 @@ def generate_draft(messages: list[BuilderMessage], app_config: AppConfig) -> Gam
 
 def generate_draft_from_transcript(transcript: str, app_config: AppConfig) -> GameDraft:
     llm = build_llm(
-        app_config.builder_provider, app_config.builder_model, app_config.default_num_ctx, app_config.keep_alive
+        app_config.builder_provider,
+        app_config.builder_model,
+        app_config.default_num_ctx,
+        app_config.keep_alive,
+        reasoning=app_config.enable_thinking,
     )
     structured_llm = llm.with_structured_output(GameDraft)
     return structured_llm.invoke(TRANSCRIPT_DRAFT_PROMPT.format(transcript=transcript))

@@ -34,15 +34,12 @@ router = APIRouter(prefix="/api/games/builder", tags=["game-builder"])
 
 
 def _resolved(settings_repo: SettingsRepository, app_config: AppConfig) -> AppConfig:
-    """`app_config.builder_provider`/`builder_model` may be unset (no
-    override in configs/models.yaml) - resolves them to the computed
-    default up front, so `game_builder.py`'s functions (unchanged, still
-    just read `app_config.builder_provider`/`builder_model` directly)
-    never need to know that resolution happened. Raises ProviderConfigError
-    (caught by main.py's global handler) when nothing anywhere is usable."""
-    provider, model = resolve_builder_model(settings_repo, app_config)
-    if (provider, model) == (app_config.builder_provider, app_config.builder_model):
-        return app_config
+    """Resolves the AI builder's provider/model to the computed default up
+    front, so `game_builder.py`'s functions (unchanged, still just read
+    `app_config.builder_provider`/`builder_model` directly) never need to
+    know that resolution happened. Raises ProviderConfigError (caught by
+    main.py's global handler) when nothing anywhere is usable."""
+    provider, model = resolve_builder_model(settings_repo)
     return app_config.model_copy(update={"builder_provider": provider, "builder_model": model})
 
 
@@ -126,7 +123,7 @@ def builder_draft_from_transcript(body: TranscriptDraftRequest):
 def builder_draft_from_video(body: VideoDraftRequest):
     app_config = get_app_config()
     try:
-        transcript = fetch_transcript(body.url, app_config.transcript_max_chars, app_config.whisper_model_size)
+        transcript = fetch_transcript(body.url, app_config.transcript_max_chars, app_config.stt_model_repo)
     except TranscriptFetchError as exc:
         raise HTTPException(422, str(exc))
     return generate_draft_from_transcript(transcript, _resolved(get_settings_repo(), app_config))

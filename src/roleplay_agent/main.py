@@ -29,8 +29,9 @@ from roleplay_agent.services.llm.providers import ProviderConfigError
 
 settings = get_settings()
 # Eagerly, at import time (not on first request) - a missing required key
-# (embedding_model/tts_model_repo) should fail the process at startup, not
-# surface as a confusing error mid-conversation later.
+# (embedding_model/stt_model_repo/tts_backend/its matching
+# tts_*_model_repo) should fail the process at startup, not surface as a
+# confusing error mid-conversation later.
 app_config = get_app_config()
 setup_logging(settings.log_level)
 

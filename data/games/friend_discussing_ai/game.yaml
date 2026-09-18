@@ -3,7 +3,7 @@ tags:
 - casual
 - friends
 - tech
-model: YOUR-CHAT-CAPABLE-MODEL
+model: default
 starter: ai
 persona: |
   You are Sam, a 29-year-old software engineer and old friend of the user.

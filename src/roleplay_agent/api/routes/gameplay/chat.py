@@ -30,13 +30,19 @@ from roleplay_agent.components.observability.metrics import log_background_fold,
 from roleplay_agent.config.settings import AppConfig, Settings, get_app_config, get_settings
 from roleplay_agent.games.models import Game
 from roleplay_agent.schema.chat import ChatRequest, SpeakRequest, VoiceSegmentResponse, VoiceTurnResponse
+from roleplay_agent.services import stt as stt_module
 from roleplay_agent.services import tts as tts_module
-from roleplay_agent.services.llm.capabilities import AUDIO_INPUT_CAPABILITY, get_available_models, has_capability
+from roleplay_agent.services.llm.capabilities import (
+    AUDIO_INPUT_CAPABILITY,
+    get_available_models,
+    has_capability,
+    resolve_game_model,
+)
 from roleplay_agent.services.llm.errors import describe_llm_error
 from roleplay_agent.services.llm.providers import ProviderConfigError
 from roleplay_agent.services.storage.models import Session
 from roleplay_agent.services.storage.repositories import SettingsRepository
-from roleplay_agent.services.stt import SttUnavailableError, transcribe_wav_bytes
+from roleplay_agent.services.stt import SttUnavailableError
 from roleplay_agent.services.tts import TtsError
 
 router = APIRouter(prefix="/api/sessions", tags=["chat"])
@@ -46,6 +52,21 @@ _TITLE_SNIPPET_CHARS = 50
 
 def _num_ctx_for(game: Game, app_config: AppConfig) -> int:
     return game.num_ctx or app_config.default_num_ctx
+
+
+def _resolved_game(game: Game, settings_repo: SettingsRepository) -> Game:
+    """Every route that's about to actually run `game`'s model (chat,
+    voice-turn) needs to resolve a `model: default` game.yaml (see
+    resolve_game_model) before touching provider/model anywhere - not just
+    once at build_llm time, since a resolved model also has to reach
+    has_capability's own lookup (voice_turn's audio-capability gate below)
+    and the background _fold_task summarizer. Routes that don't build_llm
+    at all (speak/speak-stream, which only read `game.voice`) don't need
+    this."""
+    provider, model = resolve_game_model(game.provider, game.model, settings_repo)
+    if (provider, model) == (game.provider, game.model):
+        return game
+    return game.model_copy(update={"provider": provider, "model": model})
 
 
 def _title_from_message(text: str) -> str:
@@ -65,7 +86,9 @@ def _fold_task(session_id: str, game: Game, num_ctx: int, app_config: AppConfig)
     and stored (see memory.manager) - still off the reply's critical path."""
     t_start = time.monotonic()
     try:
-        summarizer = build_summarizer(game.provider, game.model, num_ctx, app_config.keep_alive)
+        summarizer = build_summarizer(
+            game.provider, game.model, num_ctx, app_config.keep_alive, enable_thinking=app_config.enable_thinking
+        )
         embedding_repo = get_embedding_repo() if game.memory_recall else None
         embed_fn = get_embeddings().embed_query if game.memory_recall else None
         folded = fold_overflow_into_summary(
@@ -91,8 +114,9 @@ def chat(
     session: Session = Depends(get_session_or_404),
     app_config: AppConfig = Depends(get_app_config),
     agent: RoleplayAgent = Depends(get_agent),
+    settings_repo: SettingsRepository = Depends(get_settings_repo),
 ):
-    game = get_game_or_404(session.game_id)
+    game = _resolved_game(get_game_or_404(session.game_id), settings_repo)
     num_ctx = _num_ctx_for(game, app_config)
 
     if body.message:
@@ -174,10 +198,9 @@ async def speak(
             pool,
             text,
             game.voice,
-            app_config.tts_model_repo,
-            body.instruct,
-            clone_model_repo=app_config.tts_clone_model_repo,
+            instruct=body.instruct,
             voice_samples_dir=settings.voice_samples_dir,
+            **tts_module.backend_call_kwargs(app_config),
         )
     except TtsError as exc:
         logger.error("tts synthesis failed session=%s: %s", session.id, exc)
@@ -217,10 +240,9 @@ async def speak_stream(
             pool,
             text,
             game.voice,
-            app_config.tts_model_repo,
-            body.instruct,
-            clone_model_repo=app_config.tts_clone_model_repo,
+            instruct=body.instruct,
             voice_samples_dir=settings.voice_samples_dir,
+            **tts_module.backend_call_kwargs(app_config),
         )
     except TtsError as exc:
         logger.error("tts stream synthesis failed session=%s: %s", session.id, exc)
@@ -243,12 +265,12 @@ async def voice_turn(
     "Voice mode"): `audio` is the turn's raw mic capture as a WAV file. A
     model that reports AUDIO_INPUT_CAPABILITY hears it directly (agent.voice's
     to_audio_message/generate_voice_turn); every other model gets it
-    transcribed locally first (services.stt.whisper) and only the resulting
+    transcribed locally first (services.stt.stt) and only the resulting
     text is sent - see agent/voice.py's own docstring for why. 422 when
-    transcription is needed but faster-whisper isn't installed, or when the
+    transcription is needed but transformers isn't installed, or when the
     clip transcribes to nothing - the same "config fact, not a service
     outage" shape as /speak's missing-voice 422 above."""
-    game = get_game_or_404(session.game_id)
+    game = _resolved_game(get_game_or_404(session.game_id), settings_repo)
     providers = get_available_models(settings_repo)
     audio_capable = has_capability(providers, game.provider, game.model, AUDIO_INPUT_CAPABILITY)
 
@@ -264,7 +286,9 @@ async def voice_turn(
         generate_kwargs = {"audio": audio_bytes}
     else:
         try:
-            transcript = await asyncio.to_thread(transcribe_wav_bytes, audio_bytes, app_config.whisper_model_size)
+            transcript = await asyncio.to_thread(
+                stt_module.transcribe_wav_bytes, audio_bytes, app_config.stt_model_repo
+            )
         except SttUnavailableError as exc:
             raise HTTPException(422, str(exc))
         if not transcript.strip():
@@ -280,6 +304,7 @@ async def voice_turn(
             game.model,
             num_ctx,
             app_config.keep_alive,
+            enable_thinking=app_config.enable_thinking,
             **generate_kwargs,
         )
     except (httpx.TransportError, ResponseError) as exc:

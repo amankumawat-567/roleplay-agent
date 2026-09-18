@@ -18,8 +18,8 @@ class _FakeLLM:
 def test_build_summarizer_threads_provider_and_model_through(monkeypatch):
     calls = []
 
-    def fake_build_llm(provider, model, num_ctx, keep_alive):
-        calls.append((provider, model, num_ctx, keep_alive))
+    def fake_build_llm(provider, model, num_ctx, keep_alive, reasoning=None):
+        calls.append((provider, model, num_ctx, keep_alive, reasoning))
         return _FakeLLM("  a summary  ")
 
     monkeypatch.setattr(summarizer_module, "build_llm", fake_build_llm)
@@ -28,4 +28,4 @@ def test_build_summarizer_threads_provider_and_model_through(monkeypatch):
     result = summarize("", [Message(role="user", content="hi")])
 
     assert result == "a summary"
-    assert calls == [("openai", "gpt-4o-mini", 8192, "30m")]
+    assert calls == [("openai", "gpt-4o-mini", 8192, "30m", None)]

@@ -112,6 +112,9 @@ def _patch_yt_dlp(monkeypatch, fake):
     monkeypatch.setattr(media_module, "yt_dlp", type("M", (), {"YoutubeDL": fake, "utils": fake_utils}))
 
 
+_MODEL_REPO = "openai/whisper-tiny"
+
+
 def test_fetch_transcript_uses_captions_when_available(monkeypatch):
     info = {"subtitles": {"en": [{"ext": "vtt", "url": "https://example.com/captions.vtt"}]}}
     _patch_yt_dlp(monkeypatch, _FakeYoutubeDL(info=info))
@@ -124,25 +127,25 @@ def test_fetch_transcript_uses_captions_when_available(monkeypatch):
 
     monkeypatch.setattr(media_module.httpx, "get", lambda url, timeout=30: _Resp())
 
-    result = fetch_transcript("https://youtu.be/jNQXAC9IVRw", max_chars=1000)
+    result = fetch_transcript("https://youtu.be/jNQXAC9IVRw", max_chars=1000, model_repo=_MODEL_REPO)
 
     assert result == "hello world"
 
 
-def test_fetch_transcript_falls_back_to_whisper_when_no_captions(monkeypatch):
+def test_fetch_transcript_falls_back_to_stt_when_no_captions(monkeypatch):
     _patch_yt_dlp(monkeypatch, _FakeYoutubeDL(info={}))
-    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_size: "spoken words here")
+    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_repo: "spoken words here")
 
-    result = fetch_transcript("https://example.com/clip.mp4", max_chars=1000)
+    result = fetch_transcript("https://example.com/clip.mp4", max_chars=1000, model_repo=_MODEL_REPO)
 
     assert result == "spoken words here"
 
 
 def test_fetch_transcript_truncates_to_max_chars(monkeypatch):
     _patch_yt_dlp(monkeypatch, _FakeYoutubeDL(info={}))
-    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_size: "x" * 100)
+    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_repo: "x" * 100)
 
-    result = fetch_transcript("https://example.com/clip.mp4", max_chars=10)
+    result = fetch_transcript("https://example.com/clip.mp4", max_chars=10, model_repo=_MODEL_REPO)
 
     assert result == "x" * 10
 
@@ -151,31 +154,31 @@ def test_fetch_transcript_wraps_probe_errors(monkeypatch):
     _patch_yt_dlp(monkeypatch, _FakeYoutubeDL(probe_error=_FakeDownloadError("Unsupported URL")))
 
     with pytest.raises(TranscriptFetchError):
-        fetch_transcript("not a url", max_chars=1000)
+        fetch_transcript("not a url", max_chars=1000, model_repo=_MODEL_REPO)
 
 
 def test_fetch_transcript_raises_when_nothing_found(monkeypatch):
     _patch_yt_dlp(monkeypatch, _FakeYoutubeDL(info={}))
-    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_size: "")
+    monkeypatch.setattr(media_module, "_transcribe_audio", lambda url, model_repo: "")
 
     with pytest.raises(TranscriptFetchError):
-        fetch_transcript("https://example.com/silent.mp4", max_chars=1000)
+        fetch_transcript("https://example.com/silent.mp4", max_chars=1000, model_repo=_MODEL_REPO)
 
 
-def test_transcribe_audio_wraps_missing_whisper_dependency(monkeypatch, tmp_path):
-    # faster-whisper is an optional extra (`pip install '.[transcribe]'`) -
+def test_transcribe_audio_wraps_missing_transformers_dependency(monkeypatch, tmp_path):
+    # transformers is an optional extra (`pip install '.[transcribe]'`) -
     # simulate it being absent regardless of whether this environment
     # happens to have it installed (sys.modules[name] = None makes the
     # import raise ModuleNotFoundError, same as a real missing package).
     import sys
 
-    from roleplay_agent.services.stt import whisper as stt_whisper
+    from roleplay_agent.services.stt import stt as stt_module
 
     audio_path = tmp_path / "audio.wav"
     audio_path.write_bytes(b"RIFF")
     monkeypatch.setattr(media_module, "download_audio", lambda url, tmp_dir: audio_path)
-    monkeypatch.setitem(sys.modules, "faster_whisper", None)
-    stt_whisper._whisper_models.clear()
+    monkeypatch.setitem(sys.modules, "transformers", None)
+    stt_module._pipelines.clear()
 
     with pytest.raises(TranscriptFetchError, match="pip install"):
-        media_module._transcribe_audio("https://example.com/clip.mp4", "base")
+        media_module._transcribe_audio("https://example.com/clip.mp4", _MODEL_REPO)
