@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent, MouseEvent, ReactNode } from "react";
+import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Camera, ChevronDown, Image as ImageIcon, Pause, Play, Sparkles, Trash2, X } from "lucide-react";
@@ -9,7 +9,7 @@ import { coverUrlFor } from "../utils/gameTileVisuals";
 import { ModelPicker } from "../components/ModelPicker";
 import { VoiceAvatar } from "../components/VoiceAvatar";
 import { useClonedVoices } from "../hooks/useClonedVoices";
-import { VOICES, sampleUrlFor } from "../data/voices";
+import { VOICES, sampleUrlFor, voiceImageUrlFor } from "../data/voices";
 import type { GameCreateRequest, SkillSummary } from "../types";
 
 /** What `location.state.draft` can carry into this page: either the AI
@@ -128,6 +128,8 @@ function CollapsibleSection({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={`collapsible-content-${title.toLowerCase().replace(/\s+/g, '-')}`}
         className="flex w-full items-center justify-between gap-3 text-left"
       >
         <div>
@@ -137,9 +139,15 @@ function CollapsibleSection({
         <ChevronDown
           size={16}
           className={`shrink-0 text-[var(--color-sub-dim)] transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          aria-hidden="true"
         />
       </button>
-      {open && <div className="mt-4 flex flex-col gap-4">{children}</div>}
+      <div
+        id={`collapsible-content-${title.toLowerCase().replace(/\s+/g, '-')}`}
+        hidden={!open}
+      >
+        {open && <div className="mt-4 flex flex-col gap-4">{children}</div>}
+      </div>
     </section>
   );
 }
@@ -175,13 +183,57 @@ function CheckboxRow({
  * dev-ui/src/data/voices.ts) as this persona's voice, or none. Reuses
  * AudioPage's own sample-clip/avatar assets so a card here looks and
  * sounds identical to its entry there. */
+function VoiceOption({
+  id,
+  name,
+  active,
+  playing,
+  onSelect,
+  onPreview,
+  title,
+  imageUrl,
+}: {
+  id: string;
+  name: string;
+  active: boolean;
+  playing: boolean;
+  onSelect: () => void;
+  onPreview: () => void;
+  title?: string;
+  imageUrl?: string | null;
+}) {
+  return (
+    <div
+      title={title}
+      className={`flex items-center gap-1 rounded-full border py-1 pl-1 pr-1.5 text-sm transition-colors ${
+        active
+          ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-text)]"
+          : "border-[var(--color-border)] bg-white/[0.02] text-[var(--color-sub)] hover:bg-white/[0.05]"
+      }`}
+    >
+      <button type="button" onClick={onSelect} className="flex items-center gap-2 rounded-full py-0.5 pl-1 pr-2">
+        <VoiceAvatar id={id} size={28} imageUrl={imageUrl} />
+        {name}
+      </button>
+      <button
+        type="button"
+        onClick={onPreview}
+        aria-label={playing ? `Stop ${name} sample` : `Preview ${name}`}
+        title={playing ? "Stop" : "Preview"}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[var(--color-sub-dim)] transition-colors hover:bg-white/10 hover:text-[var(--color-text)]"
+      >
+        {playing ? <Pause size={11} aria-hidden="true" /> : <Play size={11} aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
+
 function VoicePicker({ selected, onChange }: { selected: string | null; onChange: (voice: string | null) => void }) {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const clonedVoices = useClonedVoices();
 
-  function preview(e: MouseEvent, voiceId: string) {
-    e.stopPropagation();
+  function preview(voiceId: string) {
     const audio = audioRef.current;
     if (!audio) return;
     if (playingId === voiceId) {
@@ -208,54 +260,33 @@ function VoicePicker({ selected, onChange }: { selected: string | null; onChange
         }`}
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.06] text-[var(--color-sub-dim)]">
-          <X size={13} />
+          <X size={13} aria-hidden="true" />
         </span>
         No voice
       </button>
       {VOICES.map((voice) => (
-        <button
+        <VoiceOption
           key={voice.id}
-          type="button"
-          onClick={() => onChange(voice.id)}
-          className={`flex items-center gap-2 rounded-full border py-1.5 pl-2 pr-1.5 text-sm transition-colors ${
-            selected === voice.id
-              ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-text)]"
-              : "border-[var(--color-border)] bg-white/[0.02] text-[var(--color-sub)] hover:bg-white/[0.05]"
-          }`}
-        >
-          <VoiceAvatar id={voice.id} size={28} />
-          {voice.name}
-          <span
-            onClick={(e) => preview(e, voice.id)}
-            title="Preview"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--color-sub-dim)] transition-colors hover:bg-white/10 hover:text-[var(--color-text)]"
-          >
-            {playingId === voice.id ? <Pause size={11} /> : <Play size={11} />}
-          </span>
-        </button>
+          id={voice.id}
+          name={voice.name}
+          active={selected === voice.id}
+          playing={playingId === voice.id}
+          onSelect={() => onChange(voice.id)}
+          onPreview={() => preview(voice.id)}
+        />
       ))}
-      {clonedVoices.map((id) => (
-        <button
+      {clonedVoices.map(({ id, name, image }) => (
+        <VoiceOption
           key={id}
-          type="button"
-          onClick={() => onChange(id)}
+          id={id}
+          name={name}
+          imageUrl={image ? voiceImageUrlFor(image) : null}
+          active={selected === id}
+          playing={playingId === id}
+          onSelect={() => onChange(id)}
+          onPreview={() => preview(id)}
           title="Cloned from a reference clip in data/voice_samples/"
-          className={`flex items-center gap-2 rounded-full border py-1.5 pl-2 pr-1.5 text-sm transition-colors ${
-            selected === id
-              ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-text)]"
-              : "border-[var(--color-border)] bg-white/[0.02] text-[var(--color-sub)] hover:bg-white/[0.05]"
-          }`}
-        >
-          <VoiceAvatar id={id} size={28} />
-          {id.charAt(0).toUpperCase() + id.slice(1)}
-          <span
-            onClick={(e) => preview(e, id)}
-            title="Preview"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--color-sub-dim)] transition-colors hover:bg-white/10 hover:text-[var(--color-text)]"
-          >
-            {playingId === id ? <Pause size={11} /> : <Play size={11} />}
-          </span>
-        </button>
+        />
       ))}
     </div>
   );
@@ -593,10 +624,12 @@ export function GameEditorPage() {
       <header className="flex items-center gap-3 bg-gradient-to-b from-white/[0.05] to-transparent px-5 py-3.5">
         <button
           onClick={() => navigate("/")}
+          aria-label="Back to home"
           className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-sub)] transition-all duration-150 hover:bg-white/[0.06] hover:text-[var(--color-text)] active:scale-90"
         >
           <ArrowLeft size={16} />
         </button>
+        <h1 className="flex-1 font-medium sr-only">{isEditing ? `Edit ${form.title || "persona"}` : "New persona"}</h1>
         <span className="flex-1 font-medium">{isEditing ? `Edit ${form.title || "persona"}` : "New persona"}</span>
         {isEditing && !loading && (
           <button
@@ -604,7 +637,7 @@ export function GameEditorPage() {
             onClick={handleEditWithAi}
             className="flex items-center gap-1.5 rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/10 px-3.5 py-1.5 text-xs font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-accent)]/20"
           >
-            <Sparkles size={13} className="text-[var(--color-accent)]" />
+            <Sparkles size={13} className="text-[var(--color-accent)]" aria-hidden="true" />
             Edit with AI
           </button>
         )}
