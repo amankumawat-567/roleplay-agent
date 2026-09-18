@@ -6,6 +6,10 @@ export interface Voice {
    * the avatar's own background comes from its vendored SVG instead (see
    * VoiceAvatar). */
   colors: [string, string];
+  /** A cloned voice's own uploaded profile image filename (see POST
+   * /api/voices/cloned), resolved to a URL via voiceImageUrlFor - null for
+   * every curated preset below, which use VoiceAvatar's vendored SVG. */
+  image?: string | null;
 }
 
 /** A short pre-generated sample clip for a voice, for quick preview on this
@@ -16,6 +20,13 @@ export interface Voice {
  * frontend's own public/. */
 export function sampleUrlFor(id: string): string {
   return `/media/voice-samples/${id}.wav`;
+}
+
+/** A cloned voice's uploaded profile image (the `image` filename GET/POST
+ * /api/voices/cloned return), served off the same static mount as its
+ * sample clip. */
+export function voiceImageUrlFor(image: string): string {
+  return `/media/voice-samples/${image}`;
 }
 
 /** CustomVoice preset speakers a persona can be assigned (Game.voice, see

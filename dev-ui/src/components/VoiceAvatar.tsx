@@ -18,8 +18,13 @@ import { gradientFor } from "../utils/gradient";
  * (see useClonedVoices) gets one the same way, on request, as new ones are
  * vendored in - `onError` falls back to the same hash-gradient-plus-initial
  * placeholder personas without cover art already use, so an id with no
- * vendored SVG yet never renders a broken image. */
-export function VoiceAvatar({ id, size = 64 }: { id: string; size?: number }) {
+ * vendored SVG yet never renders a broken image.
+ *
+ * `imageUrl` (a cloned voice's own uploaded profile image, see
+ * voiceImageUrlFor in data/voices.ts) takes priority over the vendored SVG
+ * when given - same onError-falls-back-to-gradient behavior if that image
+ * fails to load too. */
+export function VoiceAvatar({ id, size = 64, imageUrl }: { id: string; size?: number; imageUrl?: string | null }) {
   const [broken, setBroken] = useState(false);
 
   if (broken) {
@@ -35,12 +40,12 @@ export function VoiceAvatar({ id, size = 64 }: { id: string; size?: number }) {
 
   return (
     <img
-      src={`/voice-avatars/${id}.svg`}
+      src={imageUrl ?? `/voice-avatars/${id}.svg`}
       alt=""
       width={size}
       height={size}
       onError={() => setBroken(true)}
-      className="shrink-0 rounded-full ring-2 ring-white/10"
+      className="shrink-0 rounded-full object-cover ring-2 ring-white/10"
       style={{ width: size, height: size }}
     />
   );

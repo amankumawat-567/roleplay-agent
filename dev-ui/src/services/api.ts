@@ -1,6 +1,7 @@
 import type {
   BuilderSessionMessagesResponse,
   ChatMessage,
+  ClonedVoiceInfo,
   CreateBuilderSessionResponse,
   CreateSessionResponse,
   Game,
@@ -207,11 +208,30 @@ export const api = {
 
   getModels: () => request<ModelsResponse>("/api/models"),
 
-  // Voice ids discovered purely by presence in data/voice_samples/ (see
-  // scripts/extract_audio_sample.py) - not curated in dev-ui/src/data/voices.ts
-  // the way the preset speakers are, since a cloned voice has no hand-picked
-  // name/style/avatar to author.
-  getClonedVoices: () => request<{ voices: string[] }>("/api/voices/cloned"),
+  // Voices discovered purely by presence in data/voice_samples/ (see
+  // scripts/extract_audio_sample.py) plus any added via createClonedVoice
+  // below - not curated in dev-ui/src/data/voices.ts the way the preset
+  // speakers are, since a cloned voice's name/image come from whoever
+  // added it, not a hand-picked entry in that file.
+  getClonedVoices: () => request<{ voices: ClonedVoiceInfo[] }>("/api/voices/cloned"),
+
+  // The "Add audio" form's submit handler - multipart like uploadGameCover,
+  // since it may carry a profile image file alongside the wav. The wav is
+  // validated server-side (mono/16-bit/RIFF header/size/duration) and
+  // rejected with a specific reason (surfaced via ApiError.message) rather
+  // than accepted unchecked.
+  createClonedVoice: async (name: string, wav: File, image?: File | null): Promise<ClonedVoiceInfo> => {
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("wav", wav);
+    if (image) formData.append("image", image);
+    const res = await fetch("/api/voices/cloned", { method: "POST", body: formData });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new ApiError(body?.detail ?? `Request failed: ${res.status}`, res.status);
+    }
+    return res.json() as Promise<ClonedVoiceInfo>;
+  },
 
   getProfile: () => request<Profile>("/api/profile"),
 

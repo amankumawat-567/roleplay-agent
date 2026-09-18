@@ -197,6 +197,17 @@ export interface VoiceTurnResponse {
   segments: VoiceSegment[];
 }
 
+/** One cloned voice as GET/POST /api/voices/cloned returns it - `id` is
+ * the filename stem (what a persona's `voice:` field references), `name`
+ * is its display name, `image` is a sibling profile-image filename (if
+ * one was uploaded) servable off the same /media/voice-samples/ mount as
+ * the wav itself. */
+export interface ClonedVoiceInfo {
+  id: string;
+  name: string;
+  image: string | null;
+}
+
 /** The local user's own "account" - one avatar pick + an optional display
  * name, nothing more (see docs/ARCHITECTURE.md's "Profile page"). */
 export interface Profile {
