@@ -1,15 +1,6 @@
-<table align="center" style="border: none;">
-  <tr style="border: none;">
-    <td align="center" valign="middle" style="border: none;">
-      <img src=".github/assets/logo.svg" alt="Roleplay Agent" width="48">
-    </td>
-    <td valign="middle" style="border: none;">
-      <div style="font-size: 36px; font-weight: 700; white-space: nowrap;">
-        ROLEPLAY AGENT
-      </div>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src=".github/assets/header.svg" alt="Roleplay Agent" height="64">
+</p>
 
 <p align="center">
   Local, Ollama-powered companion chat with persistent memory.<br>
