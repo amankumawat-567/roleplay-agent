@@ -25,5 +25,5 @@ export function coverUrlFor(id: string, coverImage: string | null): string | nul
 /** A grid of GameTiles that reflows by the column's real width rather than
  * viewport breakpoints alone - shared by Explore's "All Games" and Skills'
  * card grid so both gain/lose columns the same way (e.g. when the sidebar
- * collapses) without cards stretching past a sensible size. */
-export const GAME_TILE_GRID_CLASS = "grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(160px,210px))]";
+ * collapses/expands) without cards stretching past a sensible size. */
+export const GAME_TILE_GRID_CLASS = "grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";

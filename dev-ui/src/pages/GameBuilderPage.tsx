@@ -181,12 +181,13 @@ export function GameBuilderPage() {
       <header className="relative z-10 flex items-center gap-3 bg-gradient-to-b from-white/[0.05] to-transparent px-5 py-3.5">
         <button
           onClick={() => navigate(backTarget)}
+          aria-label="Back"
           className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-sub)] transition-all duration-150 hover:bg-white/[0.06] hover:text-[var(--color-text)] active:scale-90"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={16} aria-hidden="true" />
         </button>
         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)]">
-          <Sparkles size={13} className="text-white" />
+          <Sparkles size={13} className="text-white" aria-hidden="true" />
         </div>
         <span className="font-medium">{isEditingGame ? "Refine with AI" : "Build a persona with AI"}</span>
       </header>
@@ -196,6 +197,9 @@ export function GameBuilderPage() {
       ) : (
         <>
           <div className="flex-1 overflow-y-auto px-5 py-6">
+            <div className="sr-only" aria-live="polite" aria-atomic="true" role="status">
+              {messages.length > 0 && messages[messages.length - 1]?.role === "assistant" ? "New message from the assistant" : ""}
+            </div>
             <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-end gap-2.5">
               {messages.map((message, i) => {
                 const isLast = i === messages.length - 1;
@@ -218,7 +222,11 @@ export function GameBuilderPage() {
 
           <div className="relative z-10 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)]/85 to-transparent px-5 pb-4 pt-10">
             <div className="mx-auto flex max-w-2xl flex-col gap-3">
-              {error && <p className="animate-fade-up text-xs text-rose-400">{error}</p>}
+              {error && (
+                <p className="animate-fade-up text-xs text-rose-400" role="alert">
+                  {error}
+                </p>
+              )}
               <button
                 onClick={handleGenerateDraft}
                 disabled={streaming || drafting || !builderSessionId}

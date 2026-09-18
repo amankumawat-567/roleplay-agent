@@ -32,6 +32,7 @@ export function TagsPage() {
           <div className="animate-fade-up mt-6 flex flex-wrap gap-2" style={{ animationDelay: "80ms" }}>
             <button
               onClick={() => setSelected(null)}
+              aria-pressed={selected === null}
               className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all duration-150 ${
                 selected === null
                   ? "border-[var(--color-accent)]/50 bg-[var(--color-accent)]/15 text-[var(--color-text)]"
@@ -44,6 +45,7 @@ export function TagsPage() {
               <button
                 key={tag}
                 onClick={() => setSelected(tag)}
+                aria-pressed={selected === tag}
                 className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all duration-150 ${
                   selected === tag
                     ? "border-[var(--color-accent)]/50 bg-[var(--color-accent)]/15 text-[var(--color-text)]"

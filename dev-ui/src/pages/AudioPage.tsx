@@ -1,23 +1,30 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { AudioLines, Pause, Play, Search, Settings } from "lucide-react";
+import { AudioLines, Pause, Play, Plus, Search, Settings, X } from "lucide-react";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { VoiceAvatar } from "../components/VoiceAvatar";
 import { useClonedVoices } from "../hooks/useClonedVoices";
 import { colorsFor } from "../utils/gradient";
 import { GAME_TILE_GRID_CLASS } from "../utils/gameTileVisuals";
-import { VOICES, sampleUrlFor } from "../data/voices";
+import { VOICES, sampleUrlFor, voiceImageUrlFor } from "../data/voices";
 import type { Voice } from "../data/voices";
+import type { ClonedVoiceInfo } from "../types";
 
 const PRESET_IDS = new Set(VOICES.map((v) => v.id));
 
-/** A cloned voice (see useClonedVoices) has no curated name/style/color the
- * way a preset does - synthesized here so it can slot into the exact same
+/** A cloned voice's own name/image (see useClonedVoices) plus a
+ * synthesized style/color, so it can slot into the exact same
  * `Voice`-shaped grid/detail-rail code below rather than a parallel branch
- * of markup, distinguished only by `PRESET_IDS` where the avatar/source
- * label actually differ. */
-function clonedVoiceEntry(id: string): Voice {
-  return { id, name: id.charAt(0).toUpperCase() + id.slice(1), style: "Custom voice", colors: colorsFor(id) };
+ * of markup, distinguished only by `PRESET_IDS` where the source label
+ * actually differs. */
+function clonedVoiceEntry(voice: ClonedVoiceInfo): Voice {
+  return {
+    id: voice.id,
+    name: voice.name,
+    style: "Custom voice",
+    colors: colorsFor(voice.id),
+    image: voice.image ? voiceImageUrlFor(voice.image) : null,
+  };
 }
 
 function VoiceCard({ voice, playing, onPlay }: { voice: Voice; playing: boolean; onPlay: () => void }) {
@@ -25,6 +32,7 @@ function VoiceCard({ voice, playing, onPlay }: { voice: Voice; playing: boolean;
     <button
       type="button"
       onClick={onPlay}
+      aria-label={`Play ${voice.name} voice sample${playing ? ", currently playing" : ""}`}
       className="group relative flex aspect-[4/4.6] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-[24px] border border-white/[0.06] bg-[#0a090f] p-4 text-center shadow-[0_18px_40px_-24px_rgba(0,0,0,0.9)] transition-all duration-500 ease-[var(--ease-out-expo)] hover:-translate-y-1.5 hover:border-white/20 hover:shadow-[0_28px_56px_-20px_rgba(0,0,0,0.8)]"
     >
       <div
@@ -33,7 +41,7 @@ function VoiceCard({ voice, playing, onPlay }: { voice: Voice; playing: boolean;
       />
       <div className="bg-grain absolute inset-0 opacity-[0.06]" />
 
-      <VoiceAvatar id={voice.id} size={72} />
+      <VoiceAvatar id={voice.id} size={72} imageUrl={voice.image} />
       <div className="relative">
         <p className="text-base font-semibold text-white">{voice.name}</p>
         <p className="mt-0.5 text-xs text-white/60">{voice.style}</p>
@@ -50,11 +58,12 @@ function VoiceCard({ voice, playing, onPlay }: { voice: Voice; playing: boolean;
 }
 
 export function AudioPage() {
-  const clonedVoiceIds = useClonedVoices();
-  const allVoices = [...VOICES, ...clonedVoiceIds.map(clonedVoiceEntry)];
+  const clonedVoices = useClonedVoices();
+  const allVoices = [...VOICES, ...clonedVoices.map(clonedVoiceEntry)];
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(VOICES[0]?.id ?? null);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const filtered = allVoices.filter((v) => {
@@ -67,6 +76,9 @@ export function AudioPage() {
 
   function playVoice(voice: Voice) {
     setSelectedId(voice.id);
+    if (window.innerWidth < 1280) {
+      setMobileDetailOpen(true);
+    }
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -102,15 +114,22 @@ export function AudioPage() {
 
         <div className="ml-auto flex items-center gap-3">
           <span className="hidden items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-[var(--color-sub)] backdrop-blur-md sm:flex">
-            <AudioLines size={13} />
+            <AudioLines size={13} aria-hidden="true" />
             {allVoices.length} Voices
           </span>
           <Link
+            to="/audio/new"
+            className="flex items-center gap-1.5 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)] px-3.5 py-2 text-xs font-medium text-white transition-all duration-200 hover:scale-105 hover:shadow-[0_4px_16px_-2px_rgba(168,85,247,0.6)] active:scale-95"
+          >
+            <Plus size={14} aria-hidden="true" />
+            Add audio
+          </Link>
+          <Link
             to="/profile#settings"
-            title="Settings"
+            aria-label="Settings"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-[var(--color-sub)] backdrop-blur-md transition-colors hover:text-[var(--color-text)]"
           >
-            <Settings size={15} />
+            <Settings size={15} aria-hidden="true" />
           </Link>
           <ProfileAvatar size={36} />
         </div>
@@ -119,11 +138,13 @@ export function AudioPage() {
       <div className="flex flex-1 gap-6 overflow-hidden px-6 pb-6">
         <div className="glass-panel flex-1 overflow-y-auto rounded-[28px] p-5">
           <div className="relative mb-5 max-w-md">
+            <label htmlFor="audio-search" className="sr-only">Search voices</label>
             <Search
               size={15}
               className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-sub-dim)]"
             />
             <input
+              id="audio-search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search voices"
@@ -164,7 +185,7 @@ export function AudioPage() {
               className="flex flex-col items-center gap-4 rounded-2xl p-6"
               style={{ background: `radial-gradient(circle at 50% 15%, ${selected.colors[0]}33, transparent 70%)` }}
             >
-              <VoiceAvatar id={selected.id} size={96} />
+              <VoiceAvatar id={selected.id} size={96} imageUrl={selected.image} />
               <div className="text-center">
                 <h2 className="text-lg font-bold tracking-tight">{selected.name}</h2>
                 <span className="mt-2 inline-flex w-fit rounded-full border border-[var(--color-border)] bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-sub)]">
@@ -200,6 +221,71 @@ export function AudioPage() {
                 : "Cloned from a reference clip in data/voice_samples/ (see scripts/extract_audio_sample.py) - assign it the same way as a preset, from a persona's editor \"Voice\" field."}
             </p>
           </aside>
+        )}
+
+        {selected && mobileDetailOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+              onClick={() => setMobileDetailOpen(false)}
+              aria-hidden="true"
+            />
+            <aside
+              className="animate-fade-up fixed bottom-0 left-0 right-0 z-50 flex max-h-[80vh] w-full flex-col rounded-t-[28px] bg-[var(--color-bg-soft)] shadow-[0_-30px_60px_-20px_rgba(0,0,0,0.8)] lg:hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`${selected.name} details`}
+            >
+              <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+                <h2 className="text-lg font-bold tracking-tight">{selected.name}</h2>
+                <button
+                  onClick={() => setMobileDetailOpen(false)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--color-sub)] transition-colors hover:bg-white/[0.06] hover:text-[var(--color-text)]"
+                  aria-label="Close details"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5">
+                <div
+                  className="flex flex-col items-center gap-4 rounded-2xl p-6"
+                  style={{ background: `radial-gradient(circle at 50% 15%, ${selected.colors[0]}33, transparent 70%)` }}
+                >
+                  <VoiceAvatar id={selected.id} size={96} imageUrl={selected.image} />
+                  <span className="inline-flex w-fit rounded-full border border-[var(--color-border)] bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-sub)]">
+                    {selected.style}
+                  </span>
+                  <button
+                    onClick={() => playVoice(selected)}
+                    className="flex items-center gap-1.5 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)] px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 active:scale-95"
+                  >
+                    {playingId === selected.id ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
+                    {playingId === selected.id ? "Playing…" : "Play sample"}
+                  </button>
+                </div>
+
+                <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--color-sub-dim)]">Details</p>
+                <div className="mt-1.5 flex flex-col gap-2 text-xs">
+                  <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] pt-2">
+                    <span className="text-[var(--color-sub-dim)]">Voice ID</span>
+                    <span className="font-mono text-[var(--color-sub)]">{selected.id}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] pt-2">
+                    <span className="text-[var(--color-sub-dim)]">Source</span>
+                    <span className="text-[var(--color-sub)]">
+                      {PRESET_IDS.has(selected.id) ? "Qwen3-TTS CustomVoice" : "Qwen3-TTS Base (cloned)"}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="mt-5 rounded-xl border border-dashed border-[var(--color-border)] bg-white/[0.02] p-3 text-xs leading-relaxed text-[var(--color-sub-dim)]">
+                  {PRESET_IDS.has(selected.id)
+                    ? "Assign this voice to a persona from its editor's \"Voice\" field, then use the read-aloud button on any of its replies in chat to hear it synthesized live."
+                    : "Cloned from a reference clip in data/voice_samples/ (see scripts/extract_audio_sample.py) - assign it the same way as a preset, from a persona's editor \"Voice\" field."}
+                </p>
+              </div>
+            </aside>
+          </>
         )}
       </div>
     </div>

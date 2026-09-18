@@ -5,6 +5,7 @@ import { api } from "../services/api";
 import { useAppStore } from "../stores/useAppStore";
 import { LibraryCard } from "../components/LibraryCard";
 import { TopBar } from "../components/TopBar";
+import { GAME_TILE_GRID_CLASS } from "../utils/gameTileVisuals";
 import type { LibraryEntry, SearchResult } from "../types";
 
 export function LibraryPage() {
@@ -96,7 +97,7 @@ export function LibraryPage() {
             {libraryError && <p className="text-sm text-rose-400">{libraryError}</p>}
 
             {!libraryError && library === null && (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+              <div className={GAME_TILE_GRID_CLASS}>
                 {[0, 1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -116,7 +117,7 @@ export function LibraryPage() {
             )}
 
             {library && library.length > 0 && (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+              <div className={GAME_TILE_GRID_CLASS}>
                 {library.map((entry, i) => (
                   <div key={entry.id} className="animate-fade-up" style={{ animationDelay: `${i * 60}ms` }}>
                     <LibraryCard

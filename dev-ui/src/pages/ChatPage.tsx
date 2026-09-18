@@ -78,6 +78,7 @@ export function ChatPage() {
       <header className="relative z-10 flex items-center gap-3 bg-gradient-to-b from-[var(--color-bg)] via-[var(--color-bg)]/85 to-transparent px-5 pb-10 pt-3.5">
         <button
           onClick={() => navigate("/")}
+          aria-label="Back to home"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--color-sub)] transition-all duration-150 hover:bg-white/[0.06] hover:text-[var(--color-text)] active:scale-90"
         >
           <ArrowLeft size={16} />
@@ -89,6 +90,7 @@ export function ChatPage() {
             aria-hidden
           />
         )}
+        <h1 className="font-medium sr-only">{characterName || "Chat"}</h1>
         <span className="font-medium">{characterName || "…"}</span>
         {game && (
           <PersonaMenu
@@ -100,7 +102,7 @@ export function ChatPage() {
         {voiceModeAvailable && (
           <button
             onClick={() => navigate(`/chat/${sessionId}/voice`)}
-            title="Switch to voice mode"
+            aria-label="Switch to voice mode"
             className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-[var(--color-sub)] transition-colors hover:bg-white/[0.08] hover:text-[var(--color-text)]"
           >
             <Phone size={12} />
@@ -110,8 +112,9 @@ export function ChatPage() {
         {remainingMs != null && (
           <span
             className={`flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-white/[0.04] px-2.5 py-1 text-xs text-[var(--color-sub)] ${voiceModeAvailable ? "" : "ml-auto"}`}
+            aria-live="polite"
           >
-            <Clock size={12} />
+            <Clock size={12} aria-hidden="true" />
             {remainingMs > 0 ? `checks back in ${formatCountdown(remainingMs)}` : "checking back…"}
           </span>
         )}
@@ -119,51 +122,63 @@ export function ChatPage() {
 
       <div className="flex-1 overflow-y-auto px-5 py-6">
         {loading ? (
-          <div className="mx-auto flex h-full max-w-2xl flex-col justify-end gap-2.5">
+          <div className="mx-auto flex h-full max-w-2xl flex-col justify-end gap-2.5" aria-busy="true">
             <div className="animate-shimmer h-14 w-2/3 self-start rounded-2xl rounded-bl-md" />
             <div className="animate-shimmer h-10 w-1/2 self-end rounded-2xl rounded-br-md" style={{ animationDelay: "0.15s" }} />
           </div>
         ) : (
-          <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-end gap-2.5">
-            {messages.map((message, i) => {
-              const isLast = i === messages.length - 1;
-              const isLiveStreaming = isLast && streaming && message.role === "assistant";
+          <>
+            <div 
+              className="sr-only" 
+              aria-live="polite" 
+              aria-atomic="true"
+              role="status"
+            >
+              {messages.length > 0 && messages[messages.length - 1]?.role === "assistant" 
+                ? `New message from ${characterName}` 
+                : ""}
+            </div>
+            <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-end gap-2.5">
+              {messages.map((message, i) => {
+                const isLast = i === messages.length - 1;
+                const isLiveStreaming = isLast && streaming && message.role === "assistant";
 
-              if (isLiveStreaming) {
-                if (!message.content) return null;
-                return <AssistantTurn key={i} lines={[message.content]} live />;
-              }
+                if (isLiveStreaming) {
+                  if (!message.content) return null;
+                  return <AssistantTurn key={i} lines={[message.content]} live />;
+                }
 
-              if (message.role === "assistant") {
-                const lines = splitIntoLines(message.content);
+                if (message.role === "assistant") {
+                  const lines = splitIntoLines(message.content);
+                  return (
+                    <AssistantTurn
+                      key={i}
+                      lines={lines.map((line) => renderRichText(line))}
+                      copyText={message.content}
+                      sentAt={sentAt[i] ?? undefined}
+                      sessionId={sessionId}
+                      checkedBack={message.kind === "followup"}
+                    />
+                  );
+                }
+
                 return (
-                  <AssistantTurn
-                    key={i}
-                    lines={lines.map((line) => renderRichText(line))}
-                    copyText={message.content}
-                    sentAt={sentAt[i] ?? undefined}
-                    sessionId={sessionId}
-                    checkedBack={message.kind === "followup"}
-                  />
+                  <div key={i} className="flex flex-col items-end gap-1">
+                    <ChatBubble role="user">{renderRichText(message.content)}</ChatBubble>
+                    <UserTimestamp sentAt={sentAt[i] ?? undefined} />
+                  </div>
                 );
-              }
-
-              return (
-                <div key={i} className="flex flex-col items-end gap-1">
-                  <ChatBubble role="user">{renderRichText(message.content)}</ChatBubble>
-                  <UserTimestamp sentAt={sentAt[i] ?? undefined} />
-                </div>
-              );
-            })}
-            {waitingForReply && <TypingIndicator title={characterName} />}
-            <div ref={bottomRef} />
-          </div>
+              })}
+              {waitingForReply && <TypingIndicator title={characterName} />}
+              <div ref={bottomRef} />
+            </div>
+          </>
         )}
       </div>
 
       <div className="relative z-10 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)]/85 to-transparent px-5 pb-4 pt-10">
         <div className="mx-auto max-w-2xl">
-          {error && <p className="animate-fade-up mb-2 text-xs text-rose-400">{error}</p>}
+          {error && <p className="animate-fade-up mb-2 text-xs text-rose-400" role="alert">{error}</p>}
           <Composer disabled={streaming || loading} onSend={sendMessage} hideDictation={voiceModeAvailable} />
         </div>
       </div>

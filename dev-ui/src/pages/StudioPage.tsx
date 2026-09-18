@@ -41,7 +41,7 @@ function StudioCard({
         <p className="mt-1.5 text-sm leading-relaxed text-[var(--color-sub)]">{description}</p>
       </div>
       <span className="relative flex items-center gap-1.5 text-xs font-medium text-[var(--color-accent)] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-        Get started <ArrowRight size={12} />
+        Get started <ArrowRight size={12} aria-hidden="true" />
       </span>
     </button>
   );
@@ -96,18 +96,21 @@ export function StudioPage() {
             <div className="mt-1 flex items-center justify-between gap-3 border-t border-[var(--color-border-soft)] pt-4">
               <span className="text-xs text-[var(--color-sub-dim)]">3 ways to start · Manual, AI-guided, or from a video</span>
               <button
-                onClick={() => navigate("/games/builder")}
+                onClick={() => document.getElementById("studio-options")?.scrollIntoView({ behavior: "smooth", block: "start" })}
                 className="flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)] px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-105 hover:shadow-[0_4px_16px_-2px_rgba(168,85,247,0.6)] active:scale-95"
               >
-                Ready to start? <ArrowRight size={14} />
+                Ready to start? <ArrowRight size={14} aria-hidden="true" />
               </button>
             </div>
           </div>
         </div>
 
-        <div className="mt-10">
+        <div id="studio-options" className="mt-10 scroll-mt-8">
           <div className="animate-fade-up mb-4 flex items-center gap-2.5" style={{ animationDelay: "120ms" }}>
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)] text-xs font-bold text-white">
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)] text-xs font-bold text-white"
+              aria-hidden="true"
+            >
               1
             </span>
             <p className="text-sm font-semibold">Choose how to start</p>
@@ -115,7 +118,7 @@ export function StudioPage() {
 
           <div className="flex flex-col gap-5 sm:flex-row">
             <StudioCard
-              icon={<Plus size={20} />}
+              icon={<Plus size={20} aria-hidden="true" />}
               tag="Manual"
               title="New persona"
               description="Fill in every field yourself - title, tags, persona, script, and the rest - with full control over each one."
@@ -123,7 +126,7 @@ export function StudioPage() {
               delay={160}
             />
             <StudioCard
-              icon={<Sparkles size={20} />}
+              icon={<Sparkles size={20} aria-hidden="true" />}
               tag="AI-guided"
               title="Build with AI"
               description="Describe who you want, answer a couple of questions, and get a full draft to review and tweak before saving."
@@ -131,7 +134,7 @@ export function StudioPage() {
               delay={220}
             />
             <StudioCard
-              icon={<FileText size={20} />}
+              icon={<FileText size={20} aria-hidden="true" />}
               tag="From a video"
               title="Import from a transcript"
               description="Paste a transcript, or point at a captioned YouTube video, and get a draft persona inspired by it."

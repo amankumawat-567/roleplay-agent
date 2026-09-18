@@ -212,10 +212,10 @@ export function VoiceCallPage() {
       <header className="relative z-10 flex items-center gap-3 bg-gradient-to-b from-[var(--color-bg)] via-[var(--color-bg)]/85 to-transparent px-5 pb-10 pt-3.5">
         <button
           onClick={() => navigate(`/chat/${sessionId}`)}
-          title="Back to text mode"
+          aria-label="Back to text mode"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--color-sub)] transition-all duration-150 hover:bg-white/[0.06] hover:text-[var(--color-text)] active:scale-90"
         >
-          <MessageSquare size={16} />
+          <MessageSquare size={16} aria-hidden="true" />
         </button>
         {characterName && (
           <span
@@ -233,17 +233,20 @@ export function VoiceCallPage() {
           />
         )}
         {remainingMs != null && (
-          <span className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-white/[0.04] px-2.5 py-1 text-xs text-[var(--color-sub)]">
-            <Clock size={12} />
+          <span
+            className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-white/[0.04] px-2.5 py-1 text-xs text-[var(--color-sub)]"
+            aria-live="polite"
+          >
+            <Clock size={12} aria-hidden="true" />
             {remainingMs > 0 ? `checks back in ${formatCountdown(remainingMs)}` : "checking back…"}
           </span>
         )}
         <button
           onClick={() => navigate("/")}
-          title="End voice mode"
+          aria-label="End voice mode"
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--color-sub)] transition-all duration-150 hover:bg-white/[0.06] hover:text-[var(--color-text)] active:scale-90 ${remainingMs != null ? "" : "ml-auto"}`}
         >
-          <X size={16} />
+          <X size={16} aria-hidden="true" />
         </button>
       </header>
 
@@ -251,37 +254,40 @@ export function VoiceCallPage() {
         <div className="relative flex items-center justify-center">
           <HeroOrb size={200} phase={orbPhase} levelRef={orbLevelRef} />
         </div>
+        <div aria-live="polite" aria-atomic="true" className="sr-only">
+          {caption !== IDLE_CAPTION && caption}
+        </div>
         <p className="max-w-md text-center text-lg leading-relaxed text-[var(--color-text)]">
           {renderRichText(caption)}
         </p>
-        {error && <p className="text-center text-sm text-rose-400">{error}</p>}
-        {micError && <p className="text-center text-sm text-rose-400">{micError}</p>}
+        {error && <p className="text-center text-sm text-rose-400" role="alert">{error}</p>}
+        {micError && <p className="text-center text-sm text-rose-400" role="alert">{micError}</p>}
       </div>
 
       <div className="relative z-10 flex items-center justify-center gap-8 bg-gradient-to-t from-[var(--color-bg)] via-[var(--color-bg)]/85 to-transparent px-5 pb-10 pt-10">
         <button
           onClick={() => navigate(`/chat/${sessionId}`)}
-          title="Back to text mode"
+          aria-label="Back to text mode"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-sub)] transition-all duration-150 hover:bg-[var(--color-surface-hover)] active:scale-95"
         >
-          <MessageSquare size={17} />
+          <MessageSquare size={17} aria-hidden="true" />
         </button>
         <button
           onClick={handleMicTap}
           disabled={phase === "thinking" || phase === "speaking"}
-          title={micLabel}
+          aria-label={micLabel}
           className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)] text-white shadow-[0_4px_20px_-4px_rgba(168,85,247,0.6)] transition-all duration-200 enabled:hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 ${
             phase === "recording" ? "animate-pulse" : ""
           }`}
         >
-          {phase === "recording" ? <Square size={22} /> : <Mic size={24} />}
+          {phase === "recording" ? <Square size={22} aria-hidden="true" /> : <Mic size={24} aria-hidden="true" />}
         </button>
         <button
           onClick={() => navigate("/")}
-          title="End voice mode"
+          aria-label="End voice mode"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-sub)] transition-all duration-150 hover:bg-[var(--color-surface-hover)] active:scale-95"
         >
-          <X size={17} />
+          <X size={17} aria-hidden="true" />
         </button>
       </div>
     </div>

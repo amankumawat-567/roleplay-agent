@@ -83,7 +83,7 @@ function FeaturedCarousel({ games, onStart }: { games: Game[]; onStart: (id: str
               icon={iconFor(game.id)}
               title={game.title}
               subtitle={game.tags.slice(1).join(" · ") || "Persona"}
-              badge={game.tags[0] ?? "Game"}
+              badge={game.tags[0] ?? "Persona"}
               accent={accentFor(game.id)}
               onClick={() => onStart(game.id)}
               game={game}
@@ -178,8 +178,10 @@ export function ExplorePage() {
             the header hogging space. */}
         <div className="animate-fade-up sticky top-0 z-20 -mx-6 flex items-center gap-4 bg-[var(--color-bg)]/85 px-6 py-3 backdrop-blur-xl">
           <div className={`relative transition-all duration-300 ${scrolled ? "max-w-2xl flex-1" : "max-w-md flex-1"}`}>
+            <label htmlFor="explore-search" className="sr-only">Search for a persona</label>
             <Search size={15} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-sub-dim)]" />
             <input
+              id="explore-search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search for a persona"
@@ -190,21 +192,23 @@ export function ExplorePage() {
 
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-[var(--color-sub)] backdrop-blur-md sm:flex">
-              <Gamepad2 size={13} />
-              {games.length} Games
+              <Gamepad2 size={13} aria-hidden="true" />
+              {games.length} Personas
             </span>
             <Link
               to="/profile#settings"
-              title="Settings"
+              aria-label="Settings"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-[var(--color-sub)] backdrop-blur-md transition-colors hover:text-[var(--color-text)]"
             >
-              <Settings size={15} />
+              <Settings size={15} aria-hidden="true" />
             </Link>
             <ProfileAvatar size={36} />
           </div>
         </div>
 
-        {error && <p className="animate-fade-up text-sm text-rose-400">{error}</p>}
+        <h1 className="sr-only">Explore Personas</h1>
+
+        {error && <p className="animate-fade-up text-sm text-rose-400" role="alert">{error}</p>}
 
         {!loading && !error && games.length === 0 && (
           <p className="animate-fade-up text-sm text-[var(--color-sub-dim)]">
@@ -291,12 +295,12 @@ export function ExplorePage() {
               </div>
             </div>
 
-            {/* All Games - every persona as a grid that reflows by the
+            {/* All Personas - every persona as a grid that reflows by the
                 content column's real width, so it gains/loses columns when
                 the sidebar opens or closes instead of only at viewport
                 breakpoints. */}
             <div className="animate-fade-up" style={{ animationDelay: "240ms" }}>
-              <h2 className="mb-3.5 text-lg font-bold tracking-tight">All Games</h2>
+              <h2 className="mb-3.5 text-lg font-bold tracking-tight">All Personas</h2>
               {filtered.length === 0 ? (
                 <p className="text-sm text-[var(--color-sub-dim)]">
                   No personas match{selectedTag ? ` "${selectedTag}"` : ""}
@@ -310,7 +314,7 @@ export function ExplorePage() {
                       icon={iconFor(game.id)}
                       title={game.title}
                       subtitle={game.tags.slice(1).join(" · ") || "Persona"}
-                      badge={game.tags[0] ?? "Game"}
+                      badge={game.tags[0] ?? "Persona"}
                       accent={accentFor(game.id)}
                       onClick={() => startChat(game.id)}
                       game={game}

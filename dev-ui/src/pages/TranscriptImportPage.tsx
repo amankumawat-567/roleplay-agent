@@ -42,13 +42,15 @@ export function TranscriptImportPage() {
       <header className="glass-panel relative z-10 flex items-center gap-3 border-b border-[var(--color-border-soft)] px-5 py-3.5">
         <button
           onClick={() => navigate("/studio")}
+          aria-label="Back to studio"
           className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-sub)] transition-all duration-150 hover:bg-white/[0.06] hover:text-[var(--color-text)] active:scale-90"
         >
           <ArrowLeft size={16} />
         </button>
         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)]">
-          <FileText size={13} className="text-white" />
+          <FileText size={13} className="text-white" aria-hidden="true" />
         </div>
+        <h1 className="font-medium sr-only">Build a persona from a transcript</h1>
         <span className="font-medium">Build a persona from a transcript</span>
       </header>
 

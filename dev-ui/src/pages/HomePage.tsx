@@ -24,7 +24,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const startChat = useStartChat();
 
-  // No ranking signal yet, so "Top Games" is just a random slice for now.
+  // No ranking signal yet, so "Popular Personas" is just a random slice for now.
   const topGames = useMemo(() => shuffled(games).slice(0, TOP_COUNT), [games]);
 
   function handleGenerate(text: string) {
@@ -46,14 +46,15 @@ export function HomePage() {
         <div className="animate-pop-in">
           <HeroOrb size={88} />
         </div>
-        <h1 className="animate-fade-up mt-4 text-center text-3xl font-bold tracking-tight text-white sm:text-4xl">
-          Generate New Game
-        </h1>
+        <h1 className="sr-only">Create a New Persona</h1>
+        <h2 className="animate-fade-up mt-4 text-center text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          Create a New Persona
+        </h2>
         <p
           className="animate-fade-up mt-2.5 max-w-md text-center text-[15px] leading-relaxed text-[var(--color-sub)]"
           style={{ animationDelay: "80ms" }}
         >
-          Describe a character, remix one you already have, or start from a game below to create
+          Describe a character, remix one you already have, or start from a persona below to create
           something uniquely yours.
         </p>
 
@@ -63,7 +64,7 @@ export function HomePage() {
 
         <div className="mt-8 w-full max-w-5xl">
           <p className="animate-fade-up mb-3.5 text-sm font-medium text-[var(--color-sub)]" style={{ animationDelay: "280ms" }}>
-            Top Games
+            Popular Personas
           </p>
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
@@ -73,7 +74,7 @@ export function HomePage() {
                   icon={iconFor(game.id)}
                   title={game.title}
                   subtitle={game.tags.slice(1).join(" · ") || "Persona"}
-                  badge={game.tags[0] ?? "Game"}
+                  badge={game.tags[0] ?? "Persona"}
                   accent={accentFor(game.id)}
                   coverUrl={coverUrlFor(game.id, game.cover_image)}
                   onClick={() => startChat(game.id)}

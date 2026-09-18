@@ -84,10 +84,11 @@ export function ProfilePage() {
       <div className="mx-auto max-w-3xl">
         <div className="animate-fade-up flex items-center gap-3">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/")}
+            aria-label="Back to home"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--color-sub)] transition-all duration-150 hover:bg-white/[0.06] hover:text-[var(--color-text)] active:scale-90"
           >
-            <ArrowLeft size={16} />
+            <ArrowLeft size={16} aria-hidden="true" />
           </button>
           <div>
             <h1 className="text-xl font-bold tracking-tight">{greeting}</h1>
@@ -114,15 +115,17 @@ export function ProfilePage() {
                       key={option.id}
                       type="button"
                       title={option.label}
+                      aria-label={option.label}
+                      aria-pressed={avatarId === option.id}
                       onClick={() => setAvatarId(option.id)}
                       className={`relative rounded-full ring-2 transition-all duration-150 ${
                         avatarId === option.id ? "ring-[var(--color-accent)]" : "ring-transparent hover:ring-white/20"
                       }`}
                     >
-                      <img src={profileAvatarUrlFor(option.id)} alt={option.label} width={44} height={44} className="rounded-full" />
+                      <img src={profileAvatarUrlFor(option.id)} alt="" width={44} height={44} className="rounded-full" />
                       {avatarId === option.id && (
                         <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent)] text-white">
-                          <Check size={10} />
+                          <Check size={10} aria-hidden="true" />
                         </span>
                       )}
                     </button>

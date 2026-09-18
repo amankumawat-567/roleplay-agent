@@ -3,7 +3,7 @@ import { Archive as ArchiveIcon, RotateCcw, Trash2 } from "lucide-react";
 import { api, ApiError } from "../services/api";
 import { useAppStore } from "../stores/useAppStore";
 import { TopBar } from "../components/TopBar";
-import { accentFor, coverUrlFor, iconFor } from "../utils/gameTileVisuals";
+import { GAME_TILE_GRID_CLASS, accentFor, coverUrlFor, iconFor } from "../utils/gameTileVisuals";
 import { formatLastPlayed } from "../utils/playStats";
 import type { SessionSummary } from "../types";
 
@@ -19,6 +19,7 @@ export function ArchivesPage() {
   const [archived, setArchived] = useState<SessionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -43,7 +44,11 @@ export function ArchivesPage() {
   }
 
   async function handleDelete(session: SessionSummary) {
-    if (!window.confirm(`Delete "${session.title}"? This can't be undone.`)) return;
+    if (confirmingId !== session.id) {
+      setConfirmingId(session.id);
+      return;
+    }
+    setConfirmingId(null);
     setBusyId(session.id);
     try {
       await api.deleteSession(session.id);
@@ -73,7 +78,7 @@ export function ArchivesPage() {
           {error && <p className="text-sm text-rose-400">{error}</p>}
 
           {!error && archived === null && (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            <div className={GAME_TILE_GRID_CLASS}>
               {[0, 1, 2, 3].map((i) => (
                 <div
                   key={i}
@@ -93,7 +98,7 @@ export function ArchivesPage() {
           )}
 
           {archived && archived.length > 0 && (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            <div className={GAME_TILE_GRID_CLASS}>
               {archived.map((session, i) => {
                 const game = games.find((g) => g.id === session.game_id);
                 const Icon = iconFor(session.game_id);
@@ -129,19 +134,29 @@ export function ArchivesPage() {
                         </div>
                         <div className="flex gap-1.5">
                           <button
-                            onClick={() => handleRestore(session)}
+                            onClick={() => {
+                              setConfirmingId(null);
+                              handleRestore(session);
+                            }}
                             disabled={busy}
                             className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1.5 text-xs font-semibold text-[#1a1025] transition hover:bg-white disabled:opacity-50"
                           >
-                            <RotateCcw size={12} /> Restore
+                            <RotateCcw size={12} aria-hidden="true" /> Restore
                           </button>
                           <button
                             onClick={() => handleDelete(session)}
+                            onBlur={() => setConfirmingId((id) => (id === session.id ? null : id))}
                             disabled={busy}
-                            title="Delete permanently"
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/40 text-white/80 backdrop-blur-md transition hover:bg-rose-500/70 hover:text-white disabled:opacity-50"
+                            aria-label={confirmingId === session.id ? `Confirm delete "${session.title}" permanently` : `Delete "${session.title}" permanently`}
+                            title={confirmingId === session.id ? "Click again to confirm" : "Delete permanently"}
+                            className={`flex shrink-0 items-center justify-center gap-1 rounded-full backdrop-blur-md transition disabled:opacity-50 ${
+                              confirmingId === session.id
+                                ? "h-7 flex-1 bg-rose-500/90 px-2.5 text-xs font-semibold text-white hover:bg-rose-500"
+                                : "h-7 w-7 bg-black/40 text-white/80 hover:bg-rose-500/70 hover:text-white"
+                            }`}
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={12} aria-hidden="true" />
+                            {confirmingId === session.id && "Confirm?"}
                           </button>
                         </div>
                       </div>
